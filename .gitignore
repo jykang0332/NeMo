@@ -1,6 +1,16 @@
 # log and data files
 *.model
 *.pkl
+
+# jykang
+*.json
+*.txt
+*.npy
+#jykang
+# tokenizer
+*.model
+*.vocab
+
 #*.ipynb
 output
 result
@@ -13,6 +23,7 @@ runs
 fastspeech_output
 .hydra
 .bash_history.local
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

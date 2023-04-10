@@ -33,3 +33,7 @@ from nemo.collections.asr.models.rnnt_bpe_models import EncDecRNNTBPEModel
 from nemo.collections.asr.models.rnnt_models import EncDecRNNTModel
 from nemo.collections.asr.models.slu_models import SLUIntentSlotBPEModel
 from nemo.collections.asr.models.ssl_models import SpeechEncDecSelfSupervisedModel
+
+#jykang
+from nemo.collections.asr.models.ctc_bpe_models_KD import EncDecCTCModelBPE_KD
+from nemo.collections.asr.models.ctc_models_KD import EncDecCTCModel_KD
