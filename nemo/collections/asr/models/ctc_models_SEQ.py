@@ -40,12 +40,14 @@ from nemo.utils import logging
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 
 # for beam search
-from nemo.collections.asr.modules import BeamSearchDecoderWithLM
+from nemo.collections.asr.modules.beam_search_decoder import BeamSearchDecoderWithLM
+from nemo.collections.asr.parts.mixins import ASRBPEMixin
+
 
 __all__ = ['EncDecCTCModel_SEQ']
 
 
-class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMixin):
+class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMixin, ASRBPEMixin):
     """Base class for encoder decoder CTC-based models."""
 
     def __init__(self, cfg: DictConfig, trainer: Trainer = None):
@@ -86,10 +88,12 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
 
         # loss
         self.loss = CTCLoss(
-            num_classes=self.decoder.num_classes_with_blank - 1,
+            num_classes=self.decoder_st.num_classes_with_blank - 1,
             zero_infinity=True,
             reduction=self._cfg.get("ctc_reduction", "mean_batch"),
+
         )
+
 
         if hasattr(self._cfg, 'spec_augment') and self._cfg.spec_augment is not None:
             self.spec_augmentation = EncDecCTCModel_SEQ.from_config_dict(self._cfg.spec_augment)
@@ -105,7 +109,7 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             with open_dict(self.cfg):
                 self.cfg.decoding = decoding_cfg
 
-        self.decoding = CTCDecoding(self.cfg.decoding, vocabulary=self.decoder.vocabulary)
+        self.decoding = CTCDecoding(self.cfg.decoding, vocabulary=self.decoder_st.vocabulary)
 
         # Setup metric with decoding strategy
         self._wer = WER(
@@ -123,6 +127,17 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
 
         # Adapter modules setup (from ASRAdapterModelMixin)
         self.setup_adapters()
+
+
+
+        # Setup the tokenizer
+        self._setup_tokenizer(cfg.tokenizer)
+
+        # Initialize a dummy vocabulary
+        vocabulary = self.tokenizer.tokenizer.get_vocab()
+
+
+
 
     @torch.no_grad()
     def transcribe(
@@ -498,10 +513,11 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             "greedy_predictions_st": NeuralType(('B', 'T'), LabelsType()),
             "outputs_te": NeuralType(('B', 'T', 'D'), LogprobsType()),
             "encoded_lengths_te": NeuralType(tuple('B'), LengthsType()),
-            "greedy_predictions_te": NeuralType(('B', 'T'), LabelsType()),
+            "beam_predictions_te_logprobs": NeuralType(('B', 'beam'), LogprobsType()),
+            "beam_predictions_te_labelseqs": NeuralType(('B', 'beam', 'T'), LabelsType()),
         }
 
-    @typecheck()
+    # @typecheck()
     def forward(
         self, input_signal=None, input_signal_length=None, processed_signal=None, processed_signal_length=None
     ):
@@ -552,14 +568,56 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
         encoder_output_te = self.encoder_te(audio_signal=processed_signal, length=processed_signal_length)
         encoded_te = encoder_output_te[0]
         encoded_len_te = encoder_output_te[1]
-        log_probs_te = self.decoder_te(encoder_output=encoded_st)
+        log_probs_te = self.decoder_te(encoder_output=encoded_te)
+
+        # type check
+        # print("log probs shape: ", log_probs_te.shape)
+        # print("length shape: ", encoded_len_te.shape)
+
         # greedy_predictions_te = log_probs_te.argmax(dim=-1, keepdim=False)
         # beam search
-        self.beam_search = BeamSearchDecoderWithLM(beam_width=5)
-        beam_predictions_te = self.beam_search.forward(log_probs_te, encoded_len_te)
+        self.beam_search = BeamSearchDecoderWithLM(
+            vocab=self.decoder_st.vocabulary,
+            lm_path=None,
+            beam_width=5,
+            alpha=1.0,
+            beta=0.0,
+            num_cpus=max(1, os.cpu_count()),
+            input_tensor=True,
+            )
+        
 
-        print(beam_predictions_te)
+        # beam search: (B, beam_size, 2(log prob and label seq))
+        beam_predictions_te = self.beam_search.forward(log_probs=log_probs_te, log_probs_length=encoded_len_te)
+        
+        # beam search log probs: (B, beam_size)
+        beam_predictions_te_logprobs = []
+        for i in range(len(beam_predictions_te)):
+            temp_logprobs = []
+            for j in range(len(beam_predictions_te[0])):
+                temp_logprobs.append(beam_predictions_te[i][j][0])
+            beam_predictions_te_logprobs.append(temp_logprobs)
 
+        # beam_predictions_te_logprobs = torch.Tensor(beam_predictions_te_logprobs)
+        # print(beam_predictions_te_logprobs.shape)
+        
+        
+        # beam search token to idx
+        beam_predictions_te_labelseqs = []
+        for i in range(len(beam_predictions_te)):
+            temp_seq = []
+            for j in range(len(beam_predictions_te[0])):
+                seq_j = self.tokenizer.text_to_ids(beam_predictions_te[i][j][1])
+                temp_seq.append(seq_j)
+            beam_predictions_te_labelseqs.append(temp_seq)
+
+    
+
+        # # bean search label seq check
+        # print(beam_predictions_te[0][0][1])
+        # a = self.tokenizer.text_to_ids(beam_predictions_te[0][0][1])
+        # print(a)
+        
 
         return (
             # student
@@ -568,9 +626,10 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             greedy_predictions_st,
 
             # teacher
-            log_probs_st,
-            encoded_len_st,
-            greedy_predictions_st,
+            log_probs_te,
+            encoded_len_te,
+            beam_predictions_te_logprobs,
+            beam_predictions_te_labelseqs
         )
 
     # PTL-specific methods
@@ -583,21 +642,67 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             AccessMixin.set_access_enabled(access_enabled=True)
 
         signal, signal_len, transcript, transcript_len = batch
+
         if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
             log_probs, encoded_len, predictions = self.forward(
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
+            # student and teacher
+            log_probs_st, encoded_len_st, greedy_predictions_st, \
+            log_probs_te, encoded_len_te, beam_predictions_te_logprobs, beam_predictions_te_labelseqs \
+            = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         if hasattr(self, '_trainer') and self._trainer is not None:
             log_every_n_steps = self._trainer.log_every_n_steps
         else:
             log_every_n_steps = 1
 
-        loss_value = self.loss(
-            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        
+        # jykang
+        # SEQ level loss
+        # Normalize beam logprobs
+        beam_predictions_te_logprobs = torch.Tensor(beam_predictions_te_logprobs)
+        beam_logprobs_te = beam_predictions_te_logprobs.softmax(dim=1)
+        # print(beam_logprobs_te)
+
+        # print(beam_logprobs_te)
+        weighted_seq_loss = 0
+        # double loop ver
+        for i in range(len(beam_logprobs_te)):
+            seq_loss_st_i = []
+            for j in range(len(beam_logprobs_te[0])):
+                # print("(Batch number, Beam number): ", i, ',', j)
+                transcript_ij = torch.Tensor(beam_predictions_te_labelseqs[i][j])
+                transcript_ij_length = torch.Tensor([len(transcript_ij)])
+                
+                seq_loss_st_ij = self.loss(log_probs=log_probs_st[i].unsqueeze(dim=0), \
+                                        targets=transcript_ij.unsqueeze(dim=0), \
+                                        input_lengths=encoded_len_st[i], \
+                                        target_lengths=transcript_ij_length)
+                # print(seq_loss_st_ij)
+                seq_loss_st_i.append(seq_loss_st_ij.item())
+            
+            seq_loss_st_i = torch.Tensor(seq_loss_st_i)
+            # print("Student seq_loss_i: ", seq_loss_st_i)
+
+            weighted_seq_loss_i = beam_logprobs_te[i].mul(seq_loss_st_i)
+            # print(weighted_seq_loss_i)
+
+            weighted_seq_loss += torch.sum(weighted_seq_loss_i)
+            # print(weighted_seq_loss)
+        
+        # exit()
+
+
+        # Student CTC Loss
+        ctc_st_loss_value = self.loss(
+            log_probs=log_probs_st, targets=transcript, input_lengths=encoded_len_st, target_lengths=transcript_len
         )
+        # print("LOSS CHEACK: ", ctc_st_loss_value)
+
+        loss_value = 0.5 * ctc_st_loss_value + 0.5 * weighted_seq_loss
+
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -620,10 +725,10 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
 
         if (batch_nb + 1) % log_every_n_steps == 0:
             self._wer.update(
-                predictions=log_probs,
+                predictions=log_probs_st,
                 targets=transcript,
                 target_lengths=transcript_len,
-                predictions_lengths=encoded_len,
+                predictions_lengths=encoded_len_st,
             )
             wer, _, _ = self._wer.compute()
             self._wer.reset()
@@ -638,7 +743,8 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
+            #jykang
+            log_probs, encoded_len, predictions, _, _, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         transcribed_texts, _ = self._wer.decoding.ctc_decoder_predictions_tensor(
             decoder_outputs=log_probs, decoder_lengths=encoded_len, return_hypotheses=False,
@@ -657,7 +763,8 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
+            #jykang
+            log_probs, encoded_len, predictions, _, _, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
