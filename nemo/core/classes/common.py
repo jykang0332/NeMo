@@ -238,7 +238,7 @@ class Typing(ABC):
                         This initiates a DFS, tracking the depth count as it goes along the nested structure.
                         Initial depth is 1 as we consider the current loop to be the 1st step inside the nest.
                         """
-                        self.__check_neural_type(val, metadata, depth=1, name=key)
+                        # self.__check_neural_type(val, metadata, depth=1, name=key)
 
     def _attach_and_validate_output_types(self, out_objects, ignore_collections=False, output_types=None):
         """

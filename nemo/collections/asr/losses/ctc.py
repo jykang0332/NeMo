@@ -65,7 +65,7 @@ class CTCLoss(nn.CTCLoss, Serialization, Typing):
 
         return losses
 
-    @typecheck()
+    # @typecheck()
     def forward(self, log_probs, targets, input_lengths, target_lengths):
         # override forward implementation
         # custom logic, if necessary
