@@ -32,8 +32,11 @@ model:
   ctc_reduction: 'mean_batch'
   skip_nan_grad: false
 
+  beam_size: 5
+
   train_ds:
     manifest_filepath: "/home/jykang/NeMo/data/train_clean_100.json,/home/jykang/NeMo/data/train_clean_360.json,/home/jykang/NeMo/data/train_other_500.json"
+    # manifest_filepath: "/home/jykang/NeMo/data/train_clean_100_check.json"
     sample_rate: ${model.sample_rate}
     batch_size: 16 # you may increase batch_size if your memory allows
     shuffle: true

@@ -108,7 +108,7 @@ class TranscriptionConfig:
      # Path to a .nemo file
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = "/home/jykang/NeMo/data/train_clean_100.json"  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/home/jykang/NeMo/data/train_clean_360.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[int] = None  # Used to select a single channel from multi-channel files
     audio_key: str = 'audio_filepath'  # Used to override the default audio key in dataset_manifest
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
@@ -152,7 +152,7 @@ class TranscriptionConfig:
     model_change: ModelChangeConfig = ModelChangeConfig()
 
     # For softmax extraction
-    softmax_path : Optional[str] = "/home/jykang/NeMo/data/softmax/train-clean-100"
+    softmax_path : Optional[str] = "/home/jykang/NeMo/data/softmax/train-clean-360"
 
 
 
@@ -268,7 +268,7 @@ def main(cfg: TranscriptionConfig) -> TranscriptionConfig:
     with autocast():
         with torch.no_grad():
             if partial_audio:
-                if isinstance(asr_model, EncDecCTCModel_KD):
+                if isinstance(asr_model, EncDecCTCModel):
                     transcriptions = transcribe_partial_audio(
                         asr_model=asr_model,
                         path2manifest=cfg.dataset_manifest,
@@ -293,7 +293,8 @@ def main(cfg: TranscriptionConfig) -> TranscriptionConfig:
             else:
                 transcriptions = asr_model.transcribe(
                     paths2audio_files=filepaths,
-                    batch_size=cfg.batch_size,
+                    batch_size=1,
+                    # batch_size=cfg.batch_size,
                     num_workers=cfg.num_workers,
                     return_hypotheses=return_hypotheses,
                     channel_selector=cfg.channel_selector,
