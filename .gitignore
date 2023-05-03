@@ -6,10 +6,7 @@
 *.json
 *.txt
 *.npy
-#jykang
-# tokenizer
-*.model
-*.vocab
+
 
 #*.ipynb
 output
