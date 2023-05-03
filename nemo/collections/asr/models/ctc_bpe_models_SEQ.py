@@ -28,6 +28,7 @@ from nemo.collections.asr.parts.mixins import ASRBPEMixin
 from nemo.core.classes.common import PretrainedModelInfo
 from nemo.utils import logging, model_utils
 
+# jykang
 from nemo.collections.asr.models.ctc_models_SEQ import EncDecCTCModel_SEQ
 
 __all__ = ['EncDecCTCModelBPE_SEQ']

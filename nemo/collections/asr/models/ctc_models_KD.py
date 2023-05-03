@@ -210,7 +210,7 @@ class EncDecCTCModel_KD(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCT
                     logits, logits_len, greedy_predictions = self.forward(
                         input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
                     )
-                    print("1111111111111111111111111111111111111111111111111111111111111", logits_len)
+
 
                     if logprobs:
                         # dump log probs per file
@@ -594,8 +594,10 @@ class EncDecCTCModel_KD(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCT
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
         )
 
-        if log_probs.shape[-2] != teacher_softmax.shape[-2]:
-           teacher_softmax = teacher_softmax[:,:log_probs.shape[-2],:]
+        # jykang 
+        # shape matching
+        # if log_probs.shape[-2] != teacher_softmax.shape[-2]:
+        #    teacher_softmax = teacher_softmax[:,:log_probs.shape[-2],:]
 
         #jykang
         loss_value_kld = self.distill_loss(log_probs, teacher_softmax)

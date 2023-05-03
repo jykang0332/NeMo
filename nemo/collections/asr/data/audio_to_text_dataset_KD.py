@@ -148,7 +148,7 @@ def get_char_dataset_KD(config: dict, augmentor: Optional['AudioAugmentor'] = No
     return dataset
 
 
-def get_concat_bpe_dataset(
+def get_concat_bpe_dataset_KD(
     config: dict,
     tokenizer: 'TokenizerSpec',
     global_rank: int,
@@ -173,7 +173,7 @@ def get_concat_bpe_dataset(
     for manifest_filepath in manifest_filepaths:
         conf = copy.deepcopy(config)
         conf['manifest_filepath'] = manifest_filepath
-        dataset = get_bpe_dataset(config=conf, tokenizer=tokenizer, augmentor=augmentor)
+        dataset = get_bpe_dataset_KD(config=conf, tokenizer=tokenizer, augmentor=augmentor)
         datasets.append(dataset)
 
     dataset = ConcatDataset(
@@ -649,7 +649,7 @@ def get_audio_to_text_bpe_dataset_from_config_KD(
             logging.warning(f"Could not load dataset as `manifest_filepath` was None. Provided config : {config}")
             return None
         if is_concat:
-            dataset = get_concat_bpe_dataset(
+            dataset = get_concat_bpe_dataset_KD(
                 config=config,
                 global_rank=global_rank,
                 world_size=world_size,

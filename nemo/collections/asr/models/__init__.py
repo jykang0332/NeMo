@@ -37,3 +37,13 @@ from nemo.collections.asr.models.ssl_models import SpeechEncDecSelfSupervisedMod
 #jykang
 from nemo.collections.asr.models.ctc_bpe_models_KD import EncDecCTCModelBPE_KD
 from nemo.collections.asr.models.ctc_models_KD import EncDecCTCModel_KD
+from nemo.collections.asr.data import audio_to_text_dataset_KD
+
+from nemo.collections.asr.models.ctc_models_SEQ import EncDecCTCModel_SEQ
+from nemo.collections.asr.models.ctc_models_SEQ_fast import EncDecCTCModel_SEQ_fast
+
+from nemo.collections.asr.modules.beam_search_decoder import BeamSearchDecoderWithLM
+
+from nemo.collections.asr.models.ctc_models_Mask import EncDecCTCModel_Mask
+
+from nemo.collections.asr.models.ctc_models_feature import EncDecCTCModel_feature

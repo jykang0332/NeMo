@@ -43,7 +43,6 @@ from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 from nemo.collections.asr.modules.beam_search_decoder import BeamSearchDecoderWithLM
 from nemo.collections.asr.parts.mixins import ASRBPEMixin
 
-
 __all__ = ['EncDecCTCModel_SEQ']
 
 
@@ -94,6 +93,14 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
 
         )
 
+        # beam ctc loss
+        self.beam_ctc_loss = CTCLoss(
+            num_classes=self.decoder_st.num_classes_with_blank - 1,
+            zero_infinity=True,
+            reduction="none",
+        
+        )
+
 
         if hasattr(self._cfg, 'spec_augment') and self._cfg.spec_augment is not None:
             self.spec_augmentation = EncDecCTCModel_SEQ.from_config_dict(self._cfg.spec_augment)
@@ -135,6 +142,10 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
 
         # Initialize a dummy vocabulary
         vocabulary = self.tokenizer.tokenizer.get_vocab()
+
+        # beam size
+        self.beam_size = self.cfg.beam_size
+
 
 
 
@@ -574,7 +585,6 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
         # print("log probs shape: ", log_probs_te.shape)
         # print("length shape: ", encoded_len_te.shape)
 
-        # greedy_predictions_te = log_probs_te.argmax(dim=-1, keepdim=False)
         # beam search
         self.beam_search = BeamSearchDecoderWithLM(
             vocab=self.decoder_st.vocabulary,
@@ -589,31 +599,73 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
 
         # beam search: (B, beam_size, 2(log prob and label seq))
         beam_predictions_te = self.beam_search.forward(log_probs=log_probs_te, log_probs_length=encoded_len_te)
+        import numpy as np
+        beam_predictions_te = np.array(beam_predictions_te)
         
-        # beam search log probs: (B, beam_size)
-        beam_predictions_te_logprobs = []
-        for i in range(len(beam_predictions_te)):
-            temp_logprobs = []
-            for j in range(len(beam_predictions_te[0])):
-                temp_logprobs.append(beam_predictions_te[i][j][0])
-            beam_predictions_te_logprobs.append(temp_logprobs)
 
-        # beam_predictions_te_logprobs = torch.Tensor(beam_predictions_te_logprobs)
-        # print(beam_predictions_te_logprobs.shape)
-        
-        
-        # beam search token to idx
-        beam_predictions_te_labelseqs = []
-        for i in range(len(beam_predictions_te)):
-            temp_seq = []
-            for j in range(len(beam_predictions_te[0])):
-                seq_j = self.tokenizer.text_to_ids(beam_predictions_te[i][j][1])
-                temp_seq.append(seq_j)
-            beam_predictions_te_labelseqs.append(temp_seq)
+        # Extract beam_predictions_te_logprobs
+        # (B, beam_size)
+        beam_predictions_te_logprobs = beam_predictions_te[..., 0].astype(np.float32)
+        beam_predictions_te_logprobs = torch.tensor(beam_predictions_te_logprobs)
 
+
+        # Extract beam_predictions_te_labelseqs
+        # (B * beam_size, max_transcript_length)
+        beam_predictions_te_seqs = beam_predictions_te[..., 1].reshape(-1).tolist()
+
+
+        # Text to index
+        beam_predictions_te_labelseqs = self.tokenizer.text_to_ids(beam_predictions_te_seqs)
+        # zero padding to make the element of d same length
+        def get_numpy_from_nonfixed_2d_array(aa, fixed_length, padding_value=0):
+            rows = []
+            for a in aa:
+                rows.append(np.pad(a, (0, fixed_length), 'constant', constant_values=padding_value)[:fixed_length])
+            return np.concatenate(rows, axis=0).reshape(-1, fixed_length)
+        
+        # get the max length and each beam_transcript_length
+        # beam_transcript_length: (B * beam_size, )
+        beam_transcript_length = []
+        for beam_transcript in beam_predictions_te_labelseqs:
+            beam_transcript_length.append(len(beam_transcript))
+        max_length = max(beam_transcript_length)
+        beam_transcript_length = torch.tensor(beam_transcript_length)
+
+        # get the numpy array
+        beam_predictions_te_labelseqs = get_numpy_from_nonfixed_2d_array(beam_predictions_te_labelseqs, max_length)
+        beam_predictions_te_labelseqs = torch.tensor(beam_predictions_te_labelseqs)
+
+
+
+        # Double loop ver
+        # # beam search log probs: (B, beam_size)
+        # beam_predictions_te_logprobs = []
+        # for i in range(len(beam_predictions_te)):
+        #     temp_logprobs = []
+        #     for j in range(len(beam_predictions_te[0])):
+        #         temp_logprobs.append(beam_predictions_te[i][j][0])
+        #     beam_predictions_te_logprobs.append(temp_logprobs)
+
+        # # beam_predictions_te_logprobs = torch.Tensor(beam_predictions_te_logprobs)
+        # # print(beam_predictions_te_logprobs.shape)        
+        
+        
+        # # beam search token to idx
+        # beam_predictions_te_labelseqs = []
+        # max_transcript_len = 0
+        # for i in range(len(beam_predictions_te)):
+        #     temp_seq = []
+        #     for j in range(len(beam_predictions_te[0])):
+        #         seq_j = self.tokenizer.text_to_ids(beam_predictions_te[i][j][1])
+
+        #         if max_transcript_len < len(seq_j):
+        #             max_transcript_len = len(seq_j)
+
+        #         temp_seq.append(seq_j)
+        #     beam_predictions_te_labelseqs.append(temp_seq)
+        
     
-
-        # # bean search label seq check
+        # # beam search label seq check
         # print(beam_predictions_te[0][0][1])
         # a = self.tokenizer.text_to_ids(beam_predictions_te[0][0][1])
         # print(a)
@@ -629,7 +681,8 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             log_probs_te,
             encoded_len_te,
             beam_predictions_te_logprobs,
-            beam_predictions_te_labelseqs
+            beam_predictions_te_labelseqs,
+            beam_transcript_length
         )
 
     # PTL-specific methods
@@ -650,49 +703,40 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
         else:
             # student and teacher
             log_probs_st, encoded_len_st, greedy_predictions_st, \
-            log_probs_te, encoded_len_te, beam_predictions_te_logprobs, beam_predictions_te_labelseqs \
+            log_probs_te, encoded_len_te, beam_te_logprobs, beam_te_labelseqs, beam_transcript_length \
             = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         if hasattr(self, '_trainer') and self._trainer is not None:
             log_every_n_steps = self._trainer.log_every_n_steps
         else:
             log_every_n_steps = 1
+    
 
-        
-        # jykang
-        # SEQ level loss
-        # Normalize beam logprobs
-        beam_predictions_te_logprobs = torch.Tensor(beam_predictions_te_logprobs)
-        beam_logprobs_te = beam_predictions_te_logprobs.softmax(dim=1)
-        # print(beam_logprobs_te)
-
-        # print(beam_logprobs_te)
-        weighted_seq_loss = 0
-        # double loop ver
-        for i in range(len(beam_logprobs_te)):
-            seq_loss_st_i = []
-            for j in range(len(beam_logprobs_te[0])):
-                # print("(Batch number, Beam number): ", i, ',', j)
-                transcript_ij = torch.Tensor(beam_predictions_te_labelseqs[i][j])
-                transcript_ij_length = torch.Tensor([len(transcript_ij)])
+        # weighted_seq_loss = 0
+        # # double loop ver
+        # for i in range(len(beam_logprobs_te)):
+        #     seq_loss_st_i = []
+        #     for j in range(len(beam_logprobs_te[0])):
+        #         # print("(Batch number, Beam number): ", i, ',', j)
+        #         transcript_ij = torch.Tensor(beam_predictions_te_labelseqs[i][j])
+        #         transcript_ij_length = torch.Tensor([len(transcript_ij)])
                 
-                seq_loss_st_ij = self.loss(log_probs=log_probs_st[i].unsqueeze(dim=0), \
-                                        targets=transcript_ij.unsqueeze(dim=0), \
-                                        input_lengths=encoded_len_st[i], \
-                                        target_lengths=transcript_ij_length)
-                # print(seq_loss_st_ij)
-                seq_loss_st_i.append(seq_loss_st_ij.item())
+        #         seq_loss_st_ij = self.loss(log_probs=log_probs_st[i].unsqueeze(dim=0), \
+        #                                 targets=transcript_ij.unsqueeze(dim=0), \
+        #                                 input_lengths=encoded_len_st[i], \
+        #                                 target_lengths=transcript_ij_length)
+        #         # print(seq_loss_st_ij)
+        #         seq_loss_st_i.append(seq_loss_st_ij.item())
             
-            seq_loss_st_i = torch.Tensor(seq_loss_st_i)
-            # print("Student seq_loss_i: ", seq_loss_st_i)
+        #     seq_loss_st_i = torch.Tensor(seq_loss_st_i)
+        #     # print("Student seq_loss_i: ", seq_loss_st_i)
 
-            weighted_seq_loss_i = beam_logprobs_te[i].mul(seq_loss_st_i)
-            # print(weighted_seq_loss_i)
+        #     weighted_seq_loss_i = beam_logprobs_te[i].mul(seq_loss_st_i)
+        #     # print(weighted_seq_loss_i)
 
-            weighted_seq_loss += torch.sum(weighted_seq_loss_i)
-            # print(weighted_seq_loss)
+        #     weighted_seq_loss += torch.sum(weighted_seq_loss_i)
+        #     # print(weighted_seq_loss)
         
-        # exit()
 
 
         # Student CTC Loss
@@ -701,7 +745,39 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
         )
         # print("LOSS CHEACK: ", ctc_st_loss_value)
 
-        loss_value = 0.5 * ctc_st_loss_value + 0.5 * weighted_seq_loss
+
+
+        # jykang
+        # SEQ level loss
+        # Normalize beam logprobs
+        beam_te_logprobs = beam_te_logprobs.softmax(dim=1) 
+
+        # log_probs_st = (B, T, V), encoded_len_st = (B, ), transcript = (B, L)
+        # beam_te_logprobs = (B, beam_size)
+        # beam_te_labelseqs = (B * beam_size, transcript_len)
+        # beam_transcript_length = (B * beam_size, )
+
+        # Change shape
+        # Expand log_probs_st to (B * beam_size, T, V)
+        log_probs_st_expanded = log_probs_st.repeat(1, self.beam_size, 1).reshape(-1, log_probs_st.shape[1], log_probs_st.shape[2])
+        # Expand encoded_len_st to (B * beam_size)
+        encoded_len_st_expanded = encoded_len_st.unsqueeze(dim=1).expand(-1, self.beam_size).reshape(-1)
+        
+
+        # beam_search_ctc_loss for student
+        # (B * beam_size, )
+        beam_loss_st = self.beam_ctc_loss(log_probs=log_probs_st_expanded, targets=beam_te_labelseqs, \
+                        input_lengths=encoded_len_st_expanded, target_lengths=beam_transcript_length)
+
+
+        # seq_loss for studnet
+        # expand beam_te_logprobs to (B * beam_size, )
+        beam_te_logprobs = beam_te_logprobs.reshape(-1)
+        beam_te_logprobs = beam_te_logprobs.cuda()
+
+        seq_loss_st = torch.sum(beam_te_logprobs * beam_loss_st)
+
+        loss_value = 0.5 * ctc_st_loss_value + 0.5 * seq_loss_st
 
 
         # Add auxiliary losses, if registered
@@ -744,7 +820,7 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             )
         else:
             #jykang
-            log_probs, encoded_len, predictions, _, _, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, predictions, _, _, _, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         transcribed_texts, _ = self._wer.decoding.ctc_decoder_predictions_tensor(
             decoder_outputs=log_probs, decoder_lengths=encoded_len, return_hypotheses=False,
@@ -764,7 +840,7 @@ class EncDecCTCModel_SEQ(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             )
         else:
             #jykang
-            log_probs, encoded_len, predictions, _, _, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, predictions, _, _, _, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len

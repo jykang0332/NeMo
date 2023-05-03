@@ -493,7 +493,7 @@ class _AudioTextDataset_KD(Dataset):
         #jykang
         import numpy as np
         file_name = os.path.splitext(os.path.basename(sample.audio_file))[0]
-        softmax_path = os.path.join("/home/jykang/NeMo/data/softmax/train-clean-100", file_name) + ".npy"
+        softmax_path = os.path.join("/home/jykang/NeMo/data/softmax/Librispeech_softmax", file_name) + ".npy"
         teacher_softmax = np.load(softmax_path)
         teacher_softmax = torch.tensor(teacher_softmax)
 
