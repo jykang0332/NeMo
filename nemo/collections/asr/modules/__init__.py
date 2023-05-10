@@ -46,3 +46,6 @@ from nemo.collections.asr.modules.rnnt import (
     StatelessTransducerDecoder,
 )
 from nemo.collections.asr.modules.squeezeformer_encoder import SqueezeformerEncoder, SqueezeformerEncoderAdapter
+
+# jykang
+from nemo.collections.asr.parts.submodules.conformer_modules_qkv import ConformerLayer_qkv
