@@ -13,3 +13,5 @@
 # limitations under the License.
 
 from nemo.collections.asr.data import audio_to_text_KD
+from nemo.collections.asr.data import audio_to_text_dataset_SelfAttn
+from nemo.collections.asr.data import audio_to_text_SelfAttn
