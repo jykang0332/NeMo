@@ -73,7 +73,7 @@ from nemo.utils import logging
 
 @dataclass
 class EvaluationConfig(transcribe_speech.TranscriptionConfig):
-    dataset_manifest: str = MISSING
+    dataset_manifest: str = "/home/jykang/NeMo/data/test_clean.json"
     output_filename: Optional[str] = "evaluation_transcripts.json"
 
     use_cer: bool = False

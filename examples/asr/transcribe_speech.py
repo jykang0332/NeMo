@@ -101,16 +101,18 @@ class ModelChangeConfig:
 @dataclass
 class TranscriptionConfig:
     # Required configs
-    model_path: Optional[str] = None  # Path to a .nemo file
+    model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-960/checkpoints/Conformer-CTC-BPE-960.nemo"
+    #"/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE/2023-03-20_14-32-50/checkpoints/Conformer-CTC-BPE/2023-03-20_14-32-50.nemo"
+    # Path to a .nemo file
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = None  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/home/jykang/NeMo/data/test_clean.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[int] = None  # Used to select a single channel from multi-channel files
     audio_key: str = 'audio_filepath'  # Used to override the default audio key in dataset_manifest
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
 
     # General configs
-    output_filename: Optional[str] = None
+    output_filename: Optional[str] = "/home/jykang/NeMo/data/results/test_clean_conformerctc_base.json"
     batch_size: int = 32
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.
