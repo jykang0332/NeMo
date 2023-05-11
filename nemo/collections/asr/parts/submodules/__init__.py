@@ -11,3 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+
+# jykang
+from nemo.collections.asr.parts.submodules.multi_head_attention_qkv import (
+    MultiHeadAttention_qkv,
+    RelPositionMultiHeadAttention_qkv,
+    RelPositionMultiHeadAttentionLongformer_qkv,
+)
