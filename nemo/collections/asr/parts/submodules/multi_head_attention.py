@@ -95,7 +95,7 @@ class MultiHeadAttention(nn.Module):
         v = v.transpose(1, 2)
 
         return q, k, v
-
+      
     def forward_attention(self, value, scores, mask):
         """Compute attention context vector.
         Args:

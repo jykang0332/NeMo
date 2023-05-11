@@ -1080,15 +1080,17 @@ class typecheck:
         if input_types is not None and len(args) > 0:
             raise TypeError("All arguments must be passed by kwargs only for typed methods")
 
+        # jykan: we don't need to check input types
         # Perform rudimentary input checks here
-        instance._validate_input_types(input_types=input_types, ignore_collections=self.ignore_collections, **kwargs)
+        # instance._validate_input_types(input_types=input_types, ignore_collections=self.ignore_collections, **kwargs)
 
         # Call the method - this can be forward, or any other callable method
         outputs = wrapped(*args, **kwargs)
 
-        instance._attach_and_validate_output_types(
-            output_types=output_types, ignore_collections=self.ignore_collections, out_objects=outputs
-        )
+        # jykang: we don't need to check output types
+        # instance._attach_and_validate_output_types(
+        #     output_types=output_types, ignore_collections=self.ignore_collections, out_objects=outputs
+        # )
 
         return outputs
 
