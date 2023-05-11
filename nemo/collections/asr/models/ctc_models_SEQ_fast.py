@@ -632,19 +632,31 @@ class EncDecCTCModel_SEQ_fast(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         
 
         # Extract beam_te_logprobs
-        # (B, beam_size)
         beam_te_logprobs = beam_predictions_te[..., 0].astype(np.float32)
-        beam_te_logprobs = torch.tensor(beam_te_logprobs)
-        # Normalize beam logprobs
-        beam_te_logprobs = (beam_te_logprobs / 10).softmax(dim=1) 
+        # beam_te_logprobs = torch.tensor(beam_te_logprobs) > (B, beam_size)
+
+        # Choose half from the back
+        # (B, beam_size // 2)
+        beam_te_logprobs = torch.tensor(beam_te_logprobs)[:, -self.beam_size // 2:]
+
+        # Normalize beam logprobs (w/o smoothing)
+        beam_te_logprobs = (beam_te_logprobs).softmax(dim=1)
+
+
 
         # Extract beam_predictions_te_labelseqs
-        # (B * beam_size, max_transcript_length)
+        # (B * beam_size / 2, max_transcript_length)
         beam_te_seqs = beam_predictions_te[..., 1].reshape(-1).tolist()
 
-
         # Text to index
-        beam_te_labelseqs = self.tokenizer.text_to_ids(beam_te_seqs)
+        total_beam_te_labelseqs = self.tokenizer.text_to_ids(beam_te_seqs)
+        half_beam = self.beam_size // 2
+        beam_te_labelseqs = []
+        for i in range(len(total_beam_te_labelseqs)):
+            tmp = (i // half_beam)
+            if tmp % 2 != 0:
+                beam_te_labelseqs.append(total_beam_te_labelseqs[i])
+
         # zero padding to make the element of d same length
         def get_numpy_from_nonfixed_2d_array(aa, fixed_length, padding_value=0):
             rows = []
@@ -653,47 +665,45 @@ class EncDecCTCModel_SEQ_fast(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
             return np.concatenate(rows, axis=0).reshape(-1, fixed_length)
         
         # Get the max length and each beam_transcript_length
-        # beam_transcript_length: (B * beam_size, )
+        # beam_transcript_length: (B * beam_size / 2, )
         beam_transcript_length = []
         for beam_transcript in beam_te_labelseqs:
             beam_transcript_length.append(len(beam_transcript))
         max_length = max(beam_transcript_length)
         beam_transcript_length = torch.tensor(beam_transcript_length)
-
+     
         # get the numpy array
         beam_te_labelseqs = get_numpy_from_nonfixed_2d_array(beam_te_labelseqs, max_length)
         beam_te_labelseqs = torch.tensor(beam_te_labelseqs)
 
-        # print(beam_te_logprobs)
-        # print(beam_te_seqs)
-        # print(beam_te_labelseqs)
-        # exit()
 
-        
+
+        # beam_te_logprobs = (B, beam_size / 2)
+        # beam_te_labelseqs = (B * beam_size / 2, transcript_len)
+        # beam_transcript_length = (B * beam_size / 2, )
         # log_probs_st = (B, T, V), encoded_len_st = (B, ), transcript = (B, L)
-        # beam_te_logprobs = (B, beam_size)
-        # beam_te_labelseqs = (B * beam_size, transcript_len)
-        # beam_transcript_length = (B * beam_size, )
 
         # Change shape
-        # Expand log_probs_st to (B * beam_size, T, V)
-        log_probs_st_expanded = log_probs_st.repeat(1, self.beam_size, 1).reshape(-1, log_probs_st.shape[1], log_probs_st.shape[2])
-        # Expand encoded_len_st to (B * beam_size)
-        encoded_len_st_expanded = encoded_len_st.unsqueeze(dim=1).expand(-1, self.beam_size).reshape(-1)
+        # Expand log_probs_st to (B * beam_size / 2, T, V)
+        log_probs_st_expanded = log_probs_st.repeat(1, self.beam_size // 2, 1).reshape(-1, log_probs_st.shape[1], log_probs_st.shape[2])
+        # Expand encoded_len_st to (B * beam_size / 2)
+        encoded_len_st_expanded = encoded_len_st.unsqueeze(dim=1).expand(-1, self.beam_size // 2).reshape(-1)
 
         # beam_search_ctc_loss for student
-        # (B * beam_size, )
+        # (B * beam_size / 2, )
         beam_loss_st = self.beam_ctc_loss(log_probs=log_probs_st_expanded, targets=beam_te_labelseqs, \
                         input_lengths=encoded_len_st_expanded, target_lengths=beam_transcript_length)                
         
 
         # seq_loss for student
-        # expand beam_te_logprobs to (B * beam_size, )
+        # expand beam_te_logprobs to (B * beam_size / 2, )
         beam_te_logprobs = beam_te_logprobs.reshape(-1)
         beam_te_logprobs = beam_te_logprobs.cuda()
 
         seq_loss_st = torch.sum(beam_te_logprobs * beam_loss_st) / log_probs_st.shape[0]
 
+        # print("CTC LOSS: ", loss_value_gt)
+        # print("SEQ LOSS: ", seq_loss_st)
 
         loss_value = 0.5 * loss_value_gt + 0.5 * seq_loss_st
 
@@ -776,18 +786,31 @@ class EncDecCTCModel_SEQ_fast(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         
 
         # Extract beam_te_logprobs
-        # (B, beam_size)
         beam_te_logprobs = beam_predictions_te[..., 0].astype(np.float32)
-        beam_te_logprobs = torch.tensor(beam_te_logprobs)
-        # Normalize beam logprobs
-        beam_te_logprobs = (beam_te_logprobs / 10).softmax(dim=1) 
+        # beam_te_logprobs = torch.tensor(beam_te_logprobs) > (B, beam_size)
+
+        # Choose half from the back
+        # (B, beam_size // 2)
+        beam_te_logprobs = torch.tensor(beam_te_logprobs)[:, -self.beam_size // 2:]
+
+        # Normalize beam logprobs (w/o smoothing)
+        beam_te_logprobs = (beam_te_logprobs).softmax(dim=1)
+
+
 
         # Extract beam_predictions_te_labelseqs
-        # (B * beam_size, max_transcript_length)
+        # (B * beam_size / 2, max_transcript_length)
         beam_te_seqs = beam_predictions_te[..., 1].reshape(-1).tolist()
 
         # Text to index
-        beam_te_labelseqs = self.tokenizer.text_to_ids(beam_te_seqs)
+        total_beam_te_labelseqs = self.tokenizer.text_to_ids(beam_te_seqs)
+        half_beam = self.beam_size // 2
+        beam_te_labelseqs = []
+        for i in range(len(total_beam_te_labelseqs)):
+            tmp = (i // half_beam)
+            if tmp % 2 != 0:
+                beam_te_labelseqs.append(total_beam_te_labelseqs[i])
+
         # zero padding to make the element of d same length
         def get_numpy_from_nonfixed_2d_array(aa, fixed_length, padding_value=0):
             rows = []
@@ -796,42 +819,42 @@ class EncDecCTCModel_SEQ_fast(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
             return np.concatenate(rows, axis=0).reshape(-1, fixed_length)
         
         # Get the max length and each beam_transcript_length
-        # beam_transcript_length: (B * beam_size, )
+        # beam_transcript_length: (B * beam_size / 2, )
         beam_transcript_length = []
         for beam_transcript in beam_te_labelseqs:
             beam_transcript_length.append(len(beam_transcript))
         max_length = max(beam_transcript_length)
         beam_transcript_length = torch.tensor(beam_transcript_length)
-
+     
         # get the numpy array
         beam_te_labelseqs = get_numpy_from_nonfixed_2d_array(beam_te_labelseqs, max_length)
         beam_te_labelseqs = torch.tensor(beam_te_labelseqs)
 
-        
+
+
+        # beam_te_logprobs = (B, beam_size / 2)
+        # beam_te_labelseqs = (B * beam_size / 2, transcript_len)
+        # beam_transcript_length = (B * beam_size / 2, )
         # log_probs_st = (B, T, V), encoded_len_st = (B, ), transcript = (B, L)
-        # beam_te_logprobs = (B, beam_size)
-        # beam_te_labelseqs = (B * beam_size, transcript_len)
-        # beam_transcript_length = (B * beam_size, )
 
         # Change shape
-        # Expand log_probs_st to (B * beam_size, T, V)
-        log_probs_st_expanded = log_probs_st.repeat(1, self.beam_size, 1).reshape(-1, log_probs_st.shape[1], log_probs_st.shape[2])
-        # Expand encoded_len_st to (B * beam_size)
-        encoded_len_st_expanded = encoded_len_st.unsqueeze(dim=1).expand(-1, self.beam_size).reshape(-1)
+        # Expand log_probs_st to (B * beam_size / 2, T, V)
+        log_probs_st_expanded = log_probs_st.repeat(1, self.beam_size // 2, 1).reshape(-1, log_probs_st.shape[1], log_probs_st.shape[2])
+        # Expand encoded_len_st to (B * beam_size / 2)
+        encoded_len_st_expanded = encoded_len_st.unsqueeze(dim=1).expand(-1, self.beam_size // 2).reshape(-1)
 
         # beam_search_ctc_loss for student
-        # (B * beam_size, )
+        # (B * beam_size / 2, )
         beam_loss_st = self.beam_ctc_loss(log_probs=log_probs_st_expanded, targets=beam_te_labelseqs, \
                         input_lengths=encoded_len_st_expanded, target_lengths=beam_transcript_length)                
         
 
         # seq_loss for student
-        # expand beam_te_logprobs to (B * beam_size, )
+        # expand beam_te_logprobs to (B * beam_size / 2, )
         beam_te_logprobs = beam_te_logprobs.reshape(-1)
         beam_te_logprobs = beam_te_logprobs.cuda()
 
         seq_loss_st = torch.sum(beam_te_logprobs * beam_loss_st) / log_probs_st.shape[0]
-
 
 
         loss_value = 0.5 * loss_value_gt + 0.5 * seq_loss_st
