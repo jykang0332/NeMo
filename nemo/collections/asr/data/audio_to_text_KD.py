@@ -74,7 +74,7 @@ def _speech_collate_fn_KD(batch, pad_id):
     else:
         raise ValueError("Expects 4 or 5 tensors in the batch!")
     
-    # compute max__audio_len
+    # compute max_audio_len
     max_audio_len = 0
     has_audio = audio_lengths[0] is not None
     if has_audio:
