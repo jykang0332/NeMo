@@ -580,7 +580,7 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
             loss_i = attn_loss(torch.log(st_attn[i][:, :encoded_len[i], :encoded_len[i]]), te_attn[i][:, :encoded_len[i], :encoded_len[i]]) / encoded_len[i]
             loss_value_attn += loss_i
         loss_value_attn = loss_value_attn / len(encoded_len)
-
+    
         # # Self Attention distillation loss > MSE
         # MSE_loss = torch.nn.MSELoss(reduction='mean')
         # loss_value = MSE_loss(st_attn, te_attn)
@@ -588,6 +588,7 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         loss_value_ctc = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
         )
+        
 
         loss_value = loss_value_ctc + 0.1 * loss_value_attn
 
