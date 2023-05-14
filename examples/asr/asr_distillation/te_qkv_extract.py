@@ -77,7 +77,6 @@ from nemo.utils.exp_manager import exp_manager
 @hydra_runner(config_path=".", config_name="conformer_ctc_bpe_qkv")
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
-
     trainer = pl.Trainer(**cfg.trainer)
     exp_manager(trainer, cfg.get("exp_manager", None))
     asr_model = EncDecCTCModelBPE_qkv(cfg=cfg.model, trainer=trainer)

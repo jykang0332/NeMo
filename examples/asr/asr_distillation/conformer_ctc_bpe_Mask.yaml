@@ -24,7 +24,7 @@
 # Pre-trained models of Conformer-CTC can be found here: https://docs.nvidia.com/deeplearning/nemo/user-guide/docs/en/stable/asr/results.html
 # The checkpoint of the large model trained on LibriSpeech with this recipe can be found here: https://ngc.nvidia.com/catalog/models/nvidia:nemo:stt_en_conformer_ctc_large_ls
 
-name: "Conformer-CTC-BPE-Mask/2023-04-26_19-36-22"
+name: "Conformer-CTC-BPE-Mask"
 
 model:
   sample_rate: 16000
@@ -33,7 +33,7 @@ model:
   skip_nan_grad: false
 
   train_ds:
-    manifest_filepath: "/home/jykang/NeMo/data/train_clean_100.json,/home/jykang/NeMo/data/train_clean_360.json,/home/jykang/NeMo/data/train_other_500.json"
+    manifest_filepath: "/data/jykang/NeMo/data/train_clean_100.json,/data/jykang/NeMo/data/train_clean_360.json,/data/jykang/NeMo/data/train_other_500.json"
     # manifest_filepath: "/home/jykang/NeMo/data/train_clean_100_check.json"
     sample_rate: ${model.sample_rate}
     batch_size: 24 # you may increase batch_size if your memory allows
@@ -197,8 +197,8 @@ exp_manager:
     always_save_nemo: True # saves the checkpoints as nemo files instead of PTL checkpoints
 
   # you need to set these two to True to continue the training
-  resume_if_exists: true
-  resume_ignore_no_checkpoint: true
+  resume_if_exists: false
+  resume_ignore_no_checkpoint: false
 
   # You may use this section to create a W&B logger
   create_wandb_logger: false

@@ -585,12 +585,12 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         # MSE_loss = torch.nn.MSELoss(reduction='mean')
         # loss_value = MSE_loss(st_attn, te_attn)
 
-        loss_value_ctc = self.loss(
-            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
-        )
+        # loss_value_ctc = self.loss(
+        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        # )
         
-
-        loss_value = loss_value_ctc + 0.1 * loss_value_attn
+        loss_value = loss_value_attn
+        # loss_value = loss_value_ctc + 0.1 * loss_value_attn
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -670,11 +670,12 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         # loss_value = MSE_loss(st_attn, te_attn)
 
 
-        loss_value_ctc = self.loss(
-            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
-        )
+        # loss_value_ctc = self.loss(
+        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        # )
 
-        loss_value = loss_value_ctc + 0.1 * loss_value_attn
+        loss_value = loss_value_attn
+        # loss_value = loss_value_ctc + 0.1 * loss_value_attn
 
         loss_value, metrics = self.add_interctc_losses(
             loss_value, transcript, transcript_len, compute_wer=True, log_wer_num_denom=True, log_prefix="val_",
