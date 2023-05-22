@@ -197,7 +197,7 @@ class SaveRestoreConnector:
             instance: ModelPT subclass instance.
             state_dict: The state dict (which may have been modified)
             strict: Bool, whether to perform strict checks when loading the state dict.
-        """
+        """       
         instance.load_state_dict(state_dict, strict=strict)
         instance._set_model_restore_state(is_being_restored=False)
 
@@ -242,6 +242,11 @@ class SaveRestoreConnector:
         if not isinstance(loaded_params, tuple):
             return loaded_params
         conf, instance, state_dict = loaded_params
+        
+        # jykang
+        # del state_dict['st_to_te_dim.weight']
+        # del state_dict['st_to_te_dim.bias']
+
         state_dict = self.modify_state_dict(conf, state_dict)
         self.load_instance_with_state_dict(instance, state_dict, strict)
         logging.info(f'Model {instance.__class__.__name__} was successfully restored from {restore_path}.')
