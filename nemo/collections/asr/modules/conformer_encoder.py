@@ -252,7 +252,8 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
         ###############################################################################
         # jykang
         # For qkv extraction
-        self.qkv_extraction = True
+        self.qkv_extraction = False
+        # self.middle_qkv = False
         ###############################################################################
 
         if att_context_size:
@@ -606,7 +607,7 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
         if self.qkv_extraction:
             for lth, (drop_prob, layer) in enumerate(zip(self.layer_drop_probs, self.layers)):
                 original_signal = audio_signal
-                audio_signal, attn = layer(
+                audio_signal, attn, value_attn = layer(
                     x=audio_signal,
                     att_mask=att_mask,
                     pos_emb=pos_emb,
@@ -616,6 +617,11 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
                     cache_last_channel_next=cache_last_channel_next,
                     cache_last_time_next=cache_last_time_next,
                 )
+
+                # if self.middle_qkv:
+                #     if lth == self.n_layers // 2:
+                #         lth_attn = attn
+                #         lth_value_attn = value_attn
 
 
         else:
@@ -689,7 +695,7 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
             # jykang
             # If qkv_extraction is True, return the attention map of the last layer
             if self.qkv_extraction:
-                return audio_signal, length, attn
+                return audio_signal, length, attn, value_attn
             else:
                 return audio_signal, length
 

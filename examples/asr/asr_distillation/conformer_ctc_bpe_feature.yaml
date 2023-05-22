@@ -24,9 +24,7 @@
 # Pre-trained models of Conformer-CTC can be found here: https://docs.nvidia.com/deeplearning/nemo/user-guide/docs/en/stable/asr/results.html
 # The checkpoint of the large model trained on LibriSpeech with this recipe can be found here: https://ngc.nvidia.com/catalog/models/nvidia:nemo:stt_en_conformer_ctc_large_ls
 
-name: "Conformer-CTC-BPE-SKD_initialized"
-
-init_from_nemo_model: /home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-SKD/2023-05-21_12-36-52/checkpoints/Conformer-CTC-BPE-SKD.nemo
+name: "Conformer-CTC-BPE-feature"
 
 model:
   sample_rate: 16000
@@ -34,16 +32,19 @@ model:
   ctc_reduction: 'mean_batch'
   skip_nan_grad: false
 
+
   train_ds:
-    manifest_filepath: "/home/jykang/NeMo/data/train_clean_100.json,/home/jykang/NeMo/data/train_clean_360.json,/home/jykang/NeMo/data/train_other_500.json"
+    # manifest_filepath: "/home/jykang/NeMo/data/train_clean_100.json,/home/jykang/NeMo/data/train_clean_360.json,/home/jykang/NeMo/data/train_other_500.json,/home/jykang/NeMo/data/dev_clean.json,/home/jykang/NeMo/data/test_clean.json"
+    manifest_filepath: "/home/jykang/NeMo/data/test_clean.json"
+    # manifest_filepath: "/home/jykang/NeMo/data/train_clean_100_check.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 16 # you may increase batch_size if your memory allows
-    shuffle: true
+    batch_size: 1 # you may increase batch_size if your memory allows
+    shuffle: False
     num_workers: 8
     pin_memory: true
     use_start_end_token: false
     trim_silence: false
-    max_duration: 16.7 # it is set for LibriSpeech, you may need to update it for your dataset
+    max_duration: 100 # it is set for LibriSpeech, you may need to update it for your dataset
     min_duration: 0.1
     # tarred datasets
     is_tarred: false
@@ -56,16 +57,16 @@ model:
   validation_ds:
     manifest_filepath: "/home/jykang/NeMo/data/dev_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 16 # you may increase batch_size if your memory allows
+    batch_size: 1 # you may increase batch_size if your memory allows
     shuffle: false
     num_workers: 8
     pin_memory: true
     use_start_end_token: false
 
   test_ds:
-    manifest_filepath: null
+    manifest_filepath: "/home/jykang/NeMo/data/test_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 16 # you may increase batch_size if your memory allows
+    batch_size: 1 # you may increase batch_size if your memory allows
     shuffle: false
     num_workers: 8
     pin_memory: true
@@ -74,7 +75,7 @@ model:
   # recommend small vocab size of 128 or 256 when using 4x sub-sampling
   # you may find more detail on how to train a tokenizer at: /scripts/tokenizers/process_asr_text_tokenizer.py
   tokenizer:
-    dir: "/home/jykang/NeMo/data/tokenizer" # path to directory which contains either tokenizer.model (bpe) or vocab.txt (wpe)
+    dir: "/home/jykang/NeMo/data/tokenizer"  # path to directory which contains either tokenizer.model (bpe) or vocab.txt (wpe)
     type: bpe  # Can be either bpe (SentencePiece tokenizer) or wpe (WordPiece tokenizer)
 
   preprocessor:
@@ -139,25 +140,11 @@ model:
     dropout_emb: 0.0 # The dropout used for embeddings
     dropout_att: 0.1 # The dropout for multi-headed attention modules
 
-    # set to non-zero to enable stochastic depth
-    stochastic_depth_drop_prob: 0.0
-    stochastic_depth_mode: linear  # linear or uniform
-    stochastic_depth_start_layer: 1
-
   decoder:
     _target_: nemo.collections.asr.modules.ConvASRDecoder
     feat_in: null
     num_classes: -1
     vocabulary: []
-
-  # config for InterCTC loss: https://arxiv.org/abs/2102.03216
-  # specify loss weights and which layers to use for InterCTC
-  # e.g., to reproduce the paper results, set loss_weights: [0.3]
-  # and apply_at_layers: [8] (assuming 18 layers). Note that final
-  # layer loss coefficient is automatically adjusted (to 0.7 in above example)
-  interctc:
-    loss_weights: []
-    apply_at_layers: []
 
   optim:
     name: adamw
@@ -181,7 +168,7 @@ model:
 trainer:
   devices: -1 # number of GPUs, -1 would use all available GPUs
   num_nodes: 1
-  max_epochs: 100
+  max_epochs: 1
   max_steps: -1 # computed at runtime if not set
   val_check_interval: 1.0 # Set to 0.25 to check 4 times per epoch, or an int for number of iterations
   accelerator: auto
@@ -191,11 +178,11 @@ trainer:
   precision: 32 # Should be set to 16 for O1 and O2 to enable the AMP.
   log_every_n_steps: 10  # Interval of logging.
   enable_progress_bar: True
-  resume_from_checkpoint: null # The path to a checkpoint file to continue the training, restores the whole state including the epoch, step, LR schedulers, apex, etc.
+  resume_from_checkpoint: null #"/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE/checkpoints" # The path to a checkpoint file to continue the training, restores the whole state including the epoch, step, LR schedulers, apex, etc.
   num_sanity_val_steps: 0 # number of steps to perform validation steps for sanity check the validation process before starting the training, setting to 0 disables it
   check_val_every_n_epoch: 1 # number of evaluations on validation every n epochs
   sync_batchnorm: true
-  enable_checkpointing: False  # Provided by exp_manager
+  enable_checkpointing: False # Provided by exp_manager
   logger: false  # Provided by exp_manager
   benchmark: false # needs to be false for models with variable-length speech input as it slows down training
 
@@ -212,7 +199,7 @@ exp_manager:
     always_save_nemo: True # saves the checkpoints as nemo files instead of PTL checkpoints
 
   # you need to set these two to True to continue the training
-  resume_if_exists: false
+  resume_if_exists: False
   resume_ignore_no_checkpoint: false
 
   # You may use this section to create a W&B logger
