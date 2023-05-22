@@ -158,6 +158,7 @@ class MultiHeadAttention_qkv(nn.Module):
             out, attn = self.forward_attention(v, scores, mask)
 
         return out, attn
+    
 
     def update_cache(self, key, value, query, cache, cache_next):
         if cache is not None:
@@ -213,7 +214,7 @@ class RelPositionMultiHeadAttention_qkv(MultiHeadAttention_qkv):
     def forward(self, query, key, value, mask, pos_emb, cache=None, cache_next=None):
         """Compute 'Scaled Dot Product Attention' with rel. positional encoding.
         Args:
-            query (torch.Tensor): (batch, time1, size)
+            query (torch.Tensor): (batch, time1, size)  # size = d_h = d_model = n_feat
             key (torch.Tensor): (batch, time2, size)
             value(torch.Tensor): (batch, time2, size)
             mask (torch.Tensor): (batch, time1, time2)
@@ -231,7 +232,7 @@ class RelPositionMultiHeadAttention_qkv(MultiHeadAttention_qkv):
         # temporary until we solve this more gracefully
         with avoid_float16_autocast_context():
             q, k, v = self.forward_qkv(query, key, value)
-            q = q.transpose(1, 2)  # (batch, time1, head, d_k)
+            q = q.transpose(1, 2)  # (batch, time1, head, d_k) # d_k = size of each head = n_feat // n_head = d_h // n_head
 
             n_batch_pos = pos_emb.size(0)
             p = self.linear_pos(pos_emb).view(n_batch_pos, -1, self.h, self.d_k)
@@ -259,7 +260,11 @@ class RelPositionMultiHeadAttention_qkv(MultiHeadAttention_qkv):
 
             out, attn = self.forward_attention(v, scores, mask)
 
-        return out, attn
+            # value scaled dot product attention
+            # v = (batch, head, time2, d_k)
+            value_attn = torch.matmul(v, v.transpose(-2, -1)) / self.s_d_k # (batch, head, time2, time2)
+
+        return out, attn, value_attn
 
 
 class RelPositionMultiHeadAttentionLongformer_qkv(RelPositionMultiHeadAttention_qkv):

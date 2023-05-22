@@ -544,11 +544,13 @@ class EncDecCTCModel_qkv(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
         stu_attn = encoder_output[2]
         log_probs = self.decoder_st(encoder_output=encoded)
         greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
+        st_value_attn = encoder_output[3]
 
         # jykang
         # teacher
         encoder_output_te = self.encoder_te(audio_signal=processed_signal, length=processed_signal_length)
         te_attn  = encoder_output_te[2]
+        te_value_attn = encoder_output_te[3]
 
 
         return (
@@ -557,6 +559,8 @@ class EncDecCTCModel_qkv(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             greedy_predictions,
             stu_attn,
             te_attn,
+            st_value_attn,
+            te_value_attn
         )
 
     # PTL-specific methods
@@ -579,7 +583,7 @@ class EncDecCTCModel_qkv(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             )
         else:
             # jykang
-            log_probs, encoded_len, _, st_attn, te_attn = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, _, st_attn, te_attn, st_value_attn, te_value_attn = self.forward(input_signal=signal, input_signal_length=signal_len)
         
 
         if hasattr(self, '_trainer') and self._trainer is not None:
@@ -587,16 +591,28 @@ class EncDecCTCModel_qkv(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
         else:
             log_every_n_steps = 1
 
+        # # jykang
+        # # Save self attention map
+        # if st_attn.shape != te_attn.shape:
+        #     print("Shape error!")
+        #     exit()
+        # import numpy as np
+        # te_attn = te_attn.cpu().detach().numpy()
+        # base_file_name = os.path.basename(filename[0])
+        # base_file_name = os.path.splitext(base_file_name)[0]
+        # np.save(f'/home/jykang/NeMo/data/self_attn/dev_clean/{base_file_name}.npy', te_attn)
+
         # jykang
         # Save self attention map
-        if st_attn.shape != te_attn.shape:
+        if st_value_attn.shape != te_value_attn.shape:
             print("Shape error!")
             exit()
         import numpy as np
-        te_attn = te_attn.cpu().detach().numpy()
+        te_value_attn = te_value_attn.cpu().detach().numpy()
         base_file_name = os.path.basename(filename[0])
         base_file_name = os.path.splitext(base_file_name)[0]
-        np.save(f'/home/jykang/NeMo/data/self_attn/test_clean/{base_file_name}.npy', te_attn)
+        np.save(f'/home/jykang/NeMo/data/self_value_attn/test_clean/{base_file_name}.npy', te_value_attn)
+
 
 
         loss_value = self.loss(
@@ -663,7 +679,7 @@ class EncDecCTCModel_qkv(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, predictions, _, _, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len

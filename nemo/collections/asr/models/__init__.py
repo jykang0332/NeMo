@@ -60,3 +60,12 @@ from nemo.collections.asr.data import audio_to_text_dataset_filename
 from nemo.collections.asr.models.ctc_models_SelfAttn import EncDecCTCModel_SelfAttn
 from nemo.collections.asr.data import audio_to_text_dataset_SelfAttn
 from nemo.collections.asr.data import audio_to_text_SelfAttn
+
+# Conformer Last layer feature extract
+from nemo.collections.asr.models.ctc_bpe_models_Lth_feature import EncDecCTCModelBPE_Lth_feature
+from nemo.collections.asr.models.ctc_models_Lth_feature import EncDecCTCModel_Lth_feature
+
+# Feature KD
+from nemo.collections.asr.models.ctc_bpe_models_SKD import EncDecCTCModelBPE_SKD
+from nemo.collections.asr.data import audio_to_text_dataset_SKD
+from nemo.collections.asr.data import audio_to_text_SKD
