@@ -183,12 +183,12 @@ def main():
         data_sets = "dev_clean_2,train_clean_5"
     for data_set in data_sets.split(","):
         logging.info("\n\nWorking on: {0}".format(data_set))
-        filepath = os.path.join(data_root, data_set + ".tar.gz")
-        logging.info("Getting {0}".format(data_set))
-        __maybe_download_file(filepath, data_set.upper())
-        logging.info("Extracting {0}".format(data_set))
-        __extract_file(filepath, data_root)
-        logging.info("Processing {0}".format(data_set))
+        # filepath = os.path.join(data_root, data_set + ".tar.gz")
+        # logging.info("Getting {0}".format(data_set))
+        # __maybe_download_file(filepath, data_set.upper())
+        # logging.info("Extracting {0}".format(data_set))
+        # __extract_file(filepath, data_root)
+        # logging.info("Processing {0}".format(data_set))
         __process_data(
             os.path.join(os.path.join(data_root, "LibriSpeech"), data_set.replace("_", "-"),),
             os.path.join(os.path.join(data_root, "LibriSpeech"), data_set.replace("_", "-"),) + "-processed",

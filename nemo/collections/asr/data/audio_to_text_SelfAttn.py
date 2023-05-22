@@ -58,8 +58,8 @@ def _speech_collate_fn_SelfAttn(batch, pad_id):
                assumes the signals are 1d torch tensors (i.e. mono audio).
     """
     packed_batch = list(zip(*batch))
-    if len(packed_batch) == 6:
-        _, audio_lengths, _, tokens_lengths, filename, self_attn = packed_batch
+    if len(packed_batch) == 7:
+        _, audio_lengths, _, tokens_lengths, filename, self_attn, self_value_attn = packed_batch
     elif len(packed_batch) == 4:
         sample_ids = None
         _, audio_lengths, _, tokens_lengths = packed_batch
@@ -76,17 +76,24 @@ def _speech_collate_fn_SelfAttn(batch, pad_id):
     max_attn_len = 0
     for i in range(len(self_attn)):
         max_attn_len = max(max_attn_len, self_attn[i].shape[1])
+    
+    # Compute max_value_attn_len
+    max_value_attn_len = 0
+    for i in range(len(self_value_attn)):
+        max_value_attn_len = max(max_value_attn_len, self_value_attn[i].shape[1])
 
-    # print(self_attn[0].shape)
-    # print(self_attn[1].shape)
-    # print(self_attn[2].shape)
-    # print(self_attn[3].shape)
-    # print(max_attn_len)
+    # print(self_value_attn[0].shape)
+    # print(self_value_attn[1].shape)
+    # print(self_value_attn[2].shape)
+    # print(self_value_attn[3].shape)
+    # print(max_value_attn_len)
+
 
     audio_signal, tokens = [], []
     self_attn = []
+    self_value_attn = []
     for b in batch:
-        sig, sig_len, tokens_i, tokens_i_len, _, self_attn_i = b
+        sig, sig_len, tokens_i, tokens_i_len, _, self_attn_i, self_v_attn_i = b
 
         if has_audio:
             sig_len = sig_len.item()
@@ -108,10 +115,23 @@ def _speech_collate_fn_SelfAttn(batch, pad_id):
             pad = (0, max_attn_len - self_attn_i_len, 0, max_attn_len - self_attn_i_len)
             self_attn_i = torch.nn.functional.pad(self_attn_i, pad, value=0)
         self_attn.append(self_attn_i)
+
+        # self value attn padding
+        # make sure all self attn have the same shape
+        self_v_attn_i_len = self_v_attn_i.shape[1]
+        if self_v_attn_i_len < max_value_attn_len:
+            pad = (0, max_value_attn_len - self_v_attn_i_len, 0, max_value_attn_len - self_v_attn_i_len)
+            self_v_attn_i = torch.nn.functional.pad(self_v_attn_i, pad, value=0)
+        self_value_attn.append(self_v_attn_i)
+
     
     self_attn = torch.stack(self_attn)
+    self_value_attn = torch.stack(self_value_attn)
     # print(max_attn_len)
     # print(self_attn.shape)
+    # print(max_value_attn_len)
+    # print(self_value_attn.shape)
+
 
     if has_audio:
         audio_signal = torch.stack(audio_signal)
@@ -127,7 +147,7 @@ def _speech_collate_fn_SelfAttn(batch, pad_id):
     #     sample_ids = torch.tensor(sample_ids, dtype=torch.int32)
     #     return audio_signal, audio_lengths, tokens, tokens_lengths, sample_ids
 
-    return audio_signal, audio_lengths, tokens, tokens_lengths, filename, self_attn
+    return audio_signal, audio_lengths, tokens, tokens_lengths, filename, self_attn, self_value_attn
 
 
 class ASRManifestProcessor:
@@ -469,6 +489,16 @@ class _AudioTextDataset_SelfAttn(Dataset):
         self_attn = torch.tensor(self_attn)
         self_attn = self_attn.squeeze(0) # (1, H, T, T) -> (H, T, T)
 
+
+        # jykang
+        # Load Self value attention map
+        self_value_attn_path = os.path.join("/home/jykang/NeMo/data/self_value_attn/Librispeech_self_value_attn/", filename) + ".npy"
+        self_value_attn = np.load(self_value_attn_path)
+        self_value_attn = torch.tensor(self_value_attn)
+        self_value_attn = self_value_attn.squeeze(0) # (1, H, T, T) -> (H, T, T)
+
+
+
         features = self.featurizer.process(
             sample.audio_file,
             offset=offset,
@@ -484,7 +514,7 @@ class _AudioTextDataset_SelfAttn(Dataset):
         if self.return_sample_id:
             output = f, fl, torch.tensor(t).long(), torch.tensor(tl).long(), index
         else:
-            output = f, fl, torch.tensor(t).long(), torch.tensor(tl).long(), filename, self_attn
+            output = f, fl, torch.tensor(t).long(), torch.tensor(tl).long(), filename, self_attn, self_value_attn
 
         return output
 

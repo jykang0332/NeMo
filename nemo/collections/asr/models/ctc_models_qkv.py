@@ -611,8 +611,12 @@ class EncDecCTCModel_qkv(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
         te_value_attn = te_value_attn.cpu().detach().numpy()
         base_file_name = os.path.basename(filename[0])
         base_file_name = os.path.splitext(base_file_name)[0]
+<<<<<<< HEAD
         np.save(f'/home/jykang/NeMo/data/self_value_attn/test_clean/{base_file_name}.npy', te_value_attn)
 
+=======
+        np.save(f'/data/jykang/NeMo/data/self_attn/train_other_500/{base_file_name}.npy', te_attn)
+>>>>>>> 50842519283404bb9e525e5ef084972c356520a0
 
 
         loss_value = self.loss(

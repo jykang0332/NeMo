@@ -585,6 +585,7 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         sim_attn = 0
         sim_v_attn = 0
         for i in range(len(encoded_len)):
+<<<<<<< HEAD
             st_attn_i = st_attn[i][:, :encoded_len[i], :encoded_len[i]]
             te_attn_i = te_attn[i][:, :encoded_len[i], :encoded_len[i]]
             st_value_attn_i = st_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
@@ -631,6 +632,22 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         # loss_value = loss_value_ctc + 0.1 * loss_value_attn
         loss_value = loss_ctc + loss_attn + loss_v_attn
 
+=======
+            loss_i = attn_loss(torch.log(st_attn[i][:, :encoded_len[i], :encoded_len[i]]), te_attn[i][:, :encoded_len[i], :encoded_len[i]]) / encoded_len[i]
+            loss_value_attn += loss_i
+        loss_value_attn = loss_value_attn / len(encoded_len)
+    
+        # # Self Attention distillation loss > MSE
+        # MSE_loss = torch.nn.MSELoss(reduction='mean')
+        # loss_value = MSE_loss(st_attn, te_attn)
+
+        # loss_value_ctc = self.loss(
+        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        # )
+        
+        loss_value = loss_value_attn
+        # loss_value = loss_value_ctc + 0.1 * loss_value_attn
+>>>>>>> 50842519283404bb9e525e5ef084972c356520a0
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -736,6 +753,7 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
             sim_v_attn_i = torch.mean(sim_v_attn_i)
             sim_v_attn += sim_v_attn_i
 
+<<<<<<< HEAD
 
         loss_attn = loss_attn / len(encoded_len)
         loss_v_attn = loss_v_attn / len(encoded_len)
@@ -752,6 +770,14 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         # loss_value = loss_value_ctc + 0.1 * loss_value_attn
         loss_value = loss_ctc + loss_attn + loss_v_attn
 
+=======
+        # loss_value_ctc = self.loss(
+        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        # )
+
+        loss_value = loss_value_attn
+        # loss_value = loss_value_ctc + 0.1 * loss_value_attn
+>>>>>>> 50842519283404bb9e525e5ef084972c356520a0
 
         loss_value, metrics = self.add_interctc_losses(
             loss_value, transcript, transcript_len, compute_wer=True, log_wer_num_denom=True, log_prefix="val_",
