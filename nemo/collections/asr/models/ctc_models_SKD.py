@@ -93,6 +93,9 @@ class EncDecCTCModel_SKD(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
 
         self.decoding = CTCDecoding(self.cfg.decoding, vocabulary=self.decoder.vocabulary)
 
+        # for dim change
+        self.st_to_te_dim1 = torch.nn.Linear(128, 512).to(self.device)
+
         # Setup metric with decoding strategy
         self._wer = WER(
             decoding=self.decoding,
@@ -557,26 +560,28 @@ class EncDecCTCModel_SKD(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             log_every_n_steps = self._trainer.log_every_n_steps
         else:
             log_every_n_steps = 1
+
+
+        # shape matching btw (B, D_te, T) and (B, D_st, T)
+        if st_feature.shape[-1] != te_feature.shape[-1]:
+           te_feature = te_feature[:, :, :st_feature.shape[-1]]
         
+
         # st_feature = (B, D_st, T)
         # te_feature = (B, D_te, T)
         st_feature = st_feature.transpose(1, 2) # (B, T, D_st)
         te_feature = te_feature.transpose(1, 2) # (B, T, D_te)
-        self.st_to_te_dim = torch.nn.Linear(st_feature.shape[2], te_feature.shape[2]).to(self.device)
-        st_feature = self.st_to_te_dim(st_feature)
-
-        # # MSE Loss
-        # skd_loss = torch.nn.MSELoss(reduction='sum')
-        # skd_loss_value = skd_loss(st_feature, te_feature)
-        # skd_loss_value = skd_loss_value / st_feature.shape[0]
-        # loss_value = skd_loss_value
+        
+        st_feature = self.st_to_te_dim1(st_feature)
 
 
         # L2 norm square
-        st_feature = st_feature.reshape(st_feature.shape[0], -1)
-        te_feature = te_feature.reshape(te_feature.shape[0], -1)
-        error = st_feature - te_feature
-        loss = torch.norm(error, p=2).pow(2) / st_feature.shape[0]
+        encoded_mask = (torch.arange(log_probs.shape[1],
+                                     device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
+
+        # SKD loss
+        error = (st_feature - te_feature) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
+        loss = torch.mean(torch.norm(error, p=2, dim=-1).pow(2))
         loss_value = loss
 
         # loss_value = self.loss(
@@ -642,25 +647,28 @@ class EncDecCTCModel_SKD(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterC
             )
         else:
             log_probs, encoded_len, predictions, st_feature = self.forward(input_signal=signal, input_signal_length=signal_len)
+  
         
+        # shape matching btw (B, D_te, T) and (B, D_st, T)
+        if st_feature.shape[-1] != te_feature.shape[-1]:
+           te_feature = te_feature[:, :, :st_feature.shape[-1]]
+
 
         # st_feature = (B, D_st, T)
         # te_feature = (B, D_te, T)
         st_feature = st_feature.transpose(1, 2) # (B, T, D_st)
         te_feature = te_feature.transpose(1, 2) # (B, T, D_te)
-        self.st_to_te_dim = torch.nn.Linear(st_feature.shape[2], te_feature.shape[2]).to(self.device)
-        st_feature = self.st_to_te_dim(st_feature)
+        
+        st_feature = self.st_to_te_dim1(st_feature)
 
-        # skd_loss = torch.nn.MSELoss()
-        # skd_loss_value = skd_loss(st_feature, te_feature)
-        # skd_loss_value = skd_loss_value
-        # loss_value = skd_loss_value
 
         # L2 norm square
-        st_feature = st_feature.reshape(st_feature.shape[0], -1)
-        te_feature = te_feature.reshape(te_feature.shape[0], -1)
-        error = st_feature - te_feature
-        loss = torch.norm(error, p=2).pow(2) / st_feature.shape[0]
+        encoded_mask = (torch.arange(log_probs.shape[1],
+                                     device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
+
+        # SKD loss
+        error = (st_feature - te_feature) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
+        loss = torch.mean(torch.norm(error, p=2, dim=-1).pow(2))
         loss_value = loss
 
 
