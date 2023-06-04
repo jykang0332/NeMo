@@ -243,9 +243,6 @@ class SaveRestoreConnector:
             return loaded_params
         conf, instance, state_dict = loaded_params
         
-        # jykang
-        # del state_dict['st_to_te_dim.weight']
-        # del state_dict['st_to_te_dim.bias']
 
         state_dict = self.modify_state_dict(conf, state_dict)
         self.load_instance_with_state_dict(instance, state_dict, strict)

@@ -47,11 +47,6 @@ from nemo.core.classes.mixins import AccessMixin, adapter_mixins
 from nemo.core.classes.module import NeuralModule
 from nemo.core.neural_types import AcousticEncodedRepresentation, ChannelType, LengthsType, NeuralType, SpectrogramType
 
-
-# jykang
-from nemo.collections.asr.parts.submodules.conformer_modules_qkv import ConformerLayer_qkv
-
-
 __all__ = ['ConformerEncoder']
 
 
@@ -249,13 +244,6 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
         self.subsampling_factor = subsampling_factor
         self.self_attention_model = self_attention_model
 
-        ###############################################################################
-        # jykang
-        # For qkv extraction
-        self.qkv_extraction = False
-        # self.middle_qkv = False
-        ###############################################################################
-
         if att_context_size:
             self.att_context_size = list(att_context_size)
         else:
@@ -387,41 +375,20 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
 
         self.layers = nn.ModuleList()
         for i in range(n_layers):
-            # jykang
-            if self.qkv_extraction:
-                layer = ConformerLayer_qkv(
-                    d_model=d_model,
-                    d_ff=d_ff,
-                    self_attention_model=self_attention_model,
-                    n_heads=n_heads,
-                    conv_kernel_size=conv_kernel_size,
-                    conv_norm_type=conv_norm_type,
-                    conv_context_size=self.conv_context_size,
-                    dropout=dropout,
-                    dropout_att=dropout_att,
-                    pos_bias_u=pos_bias_u,
-                    pos_bias_v=pos_bias_v,
-                    att_context_size=self.att_context_size,
-                    # jykang
-                    lth_layer = i,
-                    n_layers = n_layers,
-                    qkv_extraction = self.qkv_extraction
-                )
-            else:
-                layer = ConformerLayer(
-                    d_model=d_model,
-                    d_ff=d_ff,
-                    self_attention_model=self_attention_model,
-                    n_heads=n_heads,
-                    conv_kernel_size=conv_kernel_size,
-                    conv_norm_type=conv_norm_type,
-                    conv_context_size=self.conv_context_size,
-                    dropout=dropout,
-                    dropout_att=dropout_att,
-                    pos_bias_u=pos_bias_u,
-                    pos_bias_v=pos_bias_v,
-                    att_context_size=self.att_context_size,
-                )
+            layer = ConformerLayer(
+                d_model=d_model,
+                d_ff=d_ff,
+                self_attention_model=self_attention_model,
+                n_heads=n_heads,
+                conv_kernel_size=conv_kernel_size,
+                conv_norm_type=conv_norm_type,
+                conv_context_size=self.conv_context_size,
+                dropout=dropout,
+                dropout_att=dropout_att,
+                pos_bias_u=pos_bias_u,
+                pos_bias_v=pos_bias_v,
+                att_context_size=self.att_context_size,
+            )
             self.layers.append(layer)
 
         if feat_out > 0 and feat_out != self._feat_out:
@@ -535,7 +502,6 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
     def forward(
         self, audio_signal, length, cache_last_channel=None, cache_last_time=None, cache_last_channel_len=None
     ):
-
         return self.forward_internal(
             audio_signal,
             length,
@@ -543,7 +509,6 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
             cache_last_time=cache_last_time,
             cache_last_channel_len=cache_last_channel_len,
         )
-
 
     def forward_internal(
         self, audio_signal, length, cache_last_channel=None, cache_last_time=None, cache_last_channel_len=None
@@ -602,42 +567,19 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
             if self.att_mask is not None:
                 att_mask = att_mask[:, cache_len:]
 
-        # jykang
-        # qkv extraction
-        if self.qkv_extraction:
-            for lth, (drop_prob, layer) in enumerate(zip(self.layer_drop_probs, self.layers)):
-                original_signal = audio_signal
-                audio_signal, attn, value_attn = layer(
-                    x=audio_signal,
-                    att_mask=att_mask,
-                    pos_emb=pos_emb,
-                    pad_mask=pad_mask,
-                    cache_last_channel=cache_last_channel,
-                    cache_last_time=cache_last_time,
-                    cache_last_channel_next=cache_last_channel_next,
-                    cache_last_time_next=cache_last_time_next,
-                )
-
-                # if self.middle_qkv:
-                #     if lth == self.n_layers // 2:
-                #         lth_attn = attn
-                #         lth_value_attn = value_attn
-
-
-        else:
-            for lth, (drop_prob, layer) in enumerate(zip(self.layer_drop_probs, self.layers)):
-                original_signal = audio_signal
-                audio_signal = layer(
-                    x=audio_signal,
-                    att_mask=att_mask,
-                    pos_emb=pos_emb,
-                    pad_mask=pad_mask,
-                    cache_last_channel=cache_last_channel,
-                    cache_last_time=cache_last_time,
-                    cache_last_channel_next=cache_last_channel_next,
-                    cache_last_time_next=cache_last_time_next,
-                )
-
+        for lth, (drop_prob, layer) in enumerate(zip(self.layer_drop_probs, self.layers)):
+            original_signal = audio_signal
+            audio_signal = layer(
+                x=audio_signal,
+                att_mask=att_mask,
+                pos_emb=pos_emb,
+                pad_mask=pad_mask,
+                cache_last_channel=cache_last_channel,
+                cache_last_time=cache_last_time,
+                cache_last_channel_next=cache_last_channel_next,
+                cache_last_time_next=cache_last_time_next,
+            )
+                        
             # applying stochastic depth logic from https://arxiv.org/abs/2102.03216
             if self.training and drop_prob > 0.0:
                 should_drop = torch.rand(1) < drop_prob
@@ -692,12 +634,7 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
                 torch.clamp(cache_last_channel_len + cache_keep_size, max=cache_len),
             )
         else:
-            # jykang
-            # If qkv_extraction is True, return the attention map of the last layer
-            if self.qkv_extraction:
-                return audio_signal, length, attn, value_attn
-            else:
-                return audio_signal, length
+            return audio_signal, length
 
     def _create_masks(self, max_audio_length, padding_length, offset, device):
         # pad_mask is the masking to be used to ignore paddings
