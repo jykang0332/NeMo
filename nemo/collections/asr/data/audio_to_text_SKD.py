@@ -96,17 +96,13 @@ def _speech_collate_fn(batch, pad_id):
 
         # feature padding
         # make sure all features have the smae shape
+        import numpy as np
         feature_i_len = feature_i.shape[1]
         if feature_i_len < max_feature_len:
             pad = (0, max_feature_len - feature_i_len)
             feature_i = torch.nn.functional.pad(feature_i, pad, value=0)
 
-        import numpy as np
-        path = os.path.join("/home/jykang/NeMo/data/Lth_feature/check/after_padding") + ".npy"
-
         feature.append(feature_i)
-    
-    exit()
 
     feature = torch.stack(feature)
 
@@ -454,7 +450,6 @@ class _AudioTextDataset_SKD(Dataset):
         #jykang
         import numpy as np
         file_name = os.path.splitext(os.path.basename(sample.audio_file))[0]
-        print(file_name)
         path = os.path.join("/home/jykang/NeMo/data/Lth_feature/Librispeech_Lth_feature", file_name) + ".npy"
         feature = np.load(path)
         feature = torch.tensor(feature)
