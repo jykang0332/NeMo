@@ -98,7 +98,6 @@ def _speech_collate_fn_KD(batch, pad_id):
 
     #jykang
     softmax_padded = []
-
     for b in batch:
         if len(b) == 5:
             #sig, sig_len, tokens_i, tokens_i_len, _ = b

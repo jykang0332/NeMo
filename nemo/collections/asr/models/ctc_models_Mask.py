@@ -634,6 +634,8 @@ class EncDecCTCModel_Mask(ASRModel, ExportableEncDecModel, ASRModuleMixin, Inter
         tensorboard_logs.update(
             {
                 'train_loss': loss_value,
+                'ctc_loss': ctc_st_loss_value,
+                'guided_loss': masked_loss,
                 'learning_rate': self._optimizer.param_groups[0]['lr'],
                 'global_step': torch.tensor(self.trainer.global_step, dtype=torch.float32),
             }
