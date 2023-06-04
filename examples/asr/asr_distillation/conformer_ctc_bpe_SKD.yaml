@@ -33,12 +33,12 @@ model:
   skip_nan_grad: false
 
   train_ds:
-    # manifest_filepath: "/home/jykang/NeMo/data/train_clean_100.json,/home/jykang/NeMo/data/train_clean_360.json,/home/jykang/NeMo/data/train_other_500.json"
-    manifest_filepath: "/home/jykang/NeMo/data/train_clean_100_check.json"
+    manifest_filepath: "/home/jykang/NeMo/data/train_clean_100.json,/home/jykang/NeMo/data/train_clean_360.json,/home/jykang/NeMo/data/train_other_500.json"
+    # manifest_filepath: "/home/jykang/NeMo/data/dev_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 4 # you may increase batch_size if your memory allows
+    batch_size: 24 # you may increase batch_size if your memory allows
     shuffle: False
-    num_workers: 0
+    num_workers: 8
     pin_memory: true
     use_start_end_token: false
     trim_silence: false
@@ -55,16 +55,16 @@ model:
   validation_ds:
     manifest_filepath: "/home/jykang/NeMo/data/dev_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 16 # you may increase batch_size if your memory allows
+    batch_size: 24 # you may increase batch_size if your memory allows
     shuffle: false
     num_workers: 8
     pin_memory: true
     use_start_end_token: false
 
   test_ds:
-    manifest_filepath: "/home/jykang/NeMo/data/test_clean.json"
+    manifest_filepath: "/home/jykang/NeMo/data/dev_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 16 # you may increase batch_size if your memory allows
+    batch_size: 24 # you may increase batch_size if your memory allows
     shuffle: false
     num_workers: 8
     pin_memory: true

@@ -26,7 +26,7 @@
 
 name: "Conformer-CTC-BPE-SKD_initialized"
 
-init_from_nemo_model: /home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-SKD/2023-05-21_12-36-52/checkpoints/Conformer-CTC-BPE-SKD.nemo
+init_from_nemo_model: /home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-SKD/2023-05-24_19-22-52/checkpoints/Conformer-CTC-BPE-SKD.nemo
 
 model:
   sample_rate: 16000
