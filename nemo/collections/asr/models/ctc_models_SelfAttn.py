@@ -110,6 +110,9 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         # Adapter modules setup (from ASRAdapterModelMixin)
         self.setup_adapters()
 
+        # # for dim change
+        # self.st_to_te_dim = torch.nn.Linear(16, 64).to(self.device)
+
     @torch.no_grad()
     def transcribe(
         self,
@@ -528,17 +531,18 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         encoded_len = encoder_output[1]
         log_probs = self.decoder(encoder_output=encoded)
         greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
+
         # st_attn
         st_attn = encoder_output[2]
         # st_value_attn
-        st_value_attn = encoder_output[3]
+        st_value = encoder_output[6]
 
         return (
             log_probs,
             encoded_len,
             greedy_predictions,
             st_attn,
-            st_value_attn,
+            st_value,
         )
 
     # PTL-specific methods
@@ -550,21 +554,15 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         if self.is_interctc_enabled():
             AccessMixin.set_access_enabled(access_enabled=True)
 
-        signal, signal_len, transcript, transcript_len, filename, te_attn, te_value_attn = batch
+        signal, signal_len, transcript, transcript_len, filename, te_attn, te_value = batch
 
-        # te_attn (B, H, T, T)
-        # st_attn (B, H, T, T)
-        # te_value_attn (B, H, T, T)
-        # st_value_attn (B, H, T, T)
-        # filename (B,)
-        # encoded len (B,)
 
         if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
             log_probs, encoded_len, predictions = self.forward(
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions, st_attn, st_value_attn = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, predictions, st_attn, st_value = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         if hasattr(self, '_trainer') and self._trainer is not None:
             log_every_n_steps = self._trainer.log_every_n_steps
@@ -572,64 +570,94 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
             log_every_n_steps = 1
 
 
-        # jykang
-        # Self Attention distillation loss > loss_attn
-        # Self Value Attention distillation loss > loss_v_attn
-        import torch.nn.functional as F
-        attn_loss = torch.nn.KLDivLoss(reduction='batchmean')
-
-        # frame length of ith sample in the batch -> encoded_len[i]
-        # batch_size = len(encoded_len)
-        loss_attn = 0
-        loss_v_attn = 0
-        sim_attn = 0
-        sim_v_attn = 0
-        for i in range(len(encoded_len)):
-            st_attn_i = st_attn[i][:, :encoded_len[i], :encoded_len[i]]
-            te_attn_i = te_attn[i][:, :encoded_len[i], :encoded_len[i]]
-            st_value_attn_i = st_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
-            te_value_attn_i = te_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
-
-            loss_attn_i = attn_loss(torch.log(st_attn_i), te_attn_i) / encoded_len[i]
-            loss_attn += loss_attn_i
-
-            loss_v_attn_i = attn_loss(F.log_softmax(st_value_attn_i), F.softmax(te_value_attn_i)) / encoded_len[i]
-            loss_v_attn += loss_v_attn_i
-
-            # similarity check
-            norm_st = torch.norm(st_attn_i, dim=2)
-            norm_te = torch.norm(te_attn_i, dim=2)
-            sim_attn_i = torch.sum(st_attn_i * te_attn_i, dim=2) / (norm_st * norm_te)
-            sim_attn_i = torch.mean(sim_attn_i)
-            sim_attn += sim_attn_i
-
-            norm_st_v = torch.norm(st_value_attn_i, dim=2)
-            norm_te_v = torch.norm(te_value_attn_i, dim=2)
-            sim_v_attn_i = torch.sum(st_value_attn_i * te_value_attn_i, dim=2) / (norm_st_v * norm_te_v)
-            sim_v_attn_i = torch.mean(sim_v_attn_i)
-            sim_v_attn += sim_v_attn_i
+        # te_attn (B, H, T, T)
+        # st_attn (B, H, T, T)
+        # te_value (B, H, T, te_d_k), te_d_k = 512 / 8 = 64
+        # st_value (B, H, T, st_d_k), st_d_k = 128 / 8 = 16
+        # filename (B,)
+        # encoded len (B,)
 
 
-        loss_attn = loss_attn / len(encoded_len)
-        loss_v_attn = loss_v_attn / len(encoded_len)
-        sim_attn = sim_attn / len(encoded_len)
-        sim_v_attn = sim_v_attn / len(encoded_len)
 
-        # print("loss_attn: ", loss_attn)
-        # print("loss_v_attn: ", loss_v_attn)
-        # print("sim_attn: ", sim_attn)
-        # print("sim_v_attn: ", sim_v_attn)
-        # exit()
+        # shape matching (B, H, T, T)
+        if te_attn.shape[-1] != st_attn.shape[-1]:
+           te_attn = te_attn[:, :, :st_attn.shape[-1], :st_attn.shape[-1]]
+        # # shape matching (B, H, T, .)
+        # if te_value.shape[-2] != st_value.shape[-2]:
+        #    te_value = te_value[:, :, :st_value.shape[-2], :]
 
+        # self-attention distillation loss
+        attn_error = te_attn - st_attn 
+        attn_loss = torch.mean(
+            torch.sum(torch.norm(attn_error, p=2, dim=-1).pow(2),
+                      dim=-1)
+            )
 
-        loss_ctc = self.loss(
-            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
-        )
+        # # value distillation loss
+        # st_value = self.st_to_te_dim(st_value)
+        # value_error = te_value - st_value
+        # value_loss = torch.mean(
+        #     torch.sum(torch.norm(value_error, p=2, dim=-1).pow(2),
+        #                 dim=-1)
+        #     )
         
-        # loss_value = loss_attn + loss_v_attn
-        # loss_value = loss_ctc
-        # loss_value = loss_value_ctc + 0.1 * loss_value_attn
-        loss_value = loss_ctc + loss_attn + loss_v_attn
+
+        # # jykang
+        # # Self Attention distillation loss > loss_attn
+        # # Self Value Attention distillation loss > loss_v_attn
+        
+        # import torch.nn.functional as F
+        # attn_loss = torch.nn.KLDivLoss(reduction='batchmean')
+
+        # # frame length of ith sample in the batch -> encoded_len[i]
+        # # batch_size = len(encoded_len)
+        # loss_attn = 0
+        # loss_v_attn = 0
+        # sim_attn = 0
+        # sim_v_attn = 0
+        # for i in range(len(encoded_len)):
+        #     st_attn_i = st_attn[i][:, :encoded_len[i], :encoded_len[i]]
+        #     te_attn_i = te_attn[i][:, :encoded_len[i], :encoded_len[i]]
+        #     st_value_attn_i = st_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
+        #     te_value_attn_i = te_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
+
+        #     loss_attn_i = attn_loss(torch.log(st_attn_i), te_attn_i) / encoded_len[i]
+        #     loss_attn += loss_attn_i
+
+        #     loss_v_attn_i = attn_loss(F.log_softmax(st_value_attn_i), F.softmax(te_value_attn_i)) / encoded_len[i]
+        #     loss_v_attn += loss_v_attn_i
+
+        #     # similarity check
+        #     norm_st = torch.norm(st_attn_i, dim=2)
+        #     norm_te = torch.norm(te_attn_i, dim=2)
+        #     sim_attn_i = torch.sum(st_attn_i * te_attn_i, dim=2) / (norm_st * norm_te)
+        #     sim_attn_i = torch.mean(sim_attn_i)
+        #     sim_attn += sim_attn_i
+
+        #     norm_st_v = torch.norm(st_value_attn_i, dim=2)
+        #     norm_te_v = torch.norm(te_value_attn_i, dim=2)
+        #     sim_v_attn_i = torch.sum(st_value_attn_i * te_value_attn_i, dim=2) / (norm_st_v * norm_te_v)
+        #     sim_v_attn_i = torch.mean(sim_v_attn_i)
+        #     sim_v_attn += sim_v_attn_i
+
+
+        # loss_attn = loss_attn / len(encoded_len)
+        # loss_v_attn = loss_v_attn / len(encoded_len)
+        # sim_attn = sim_attn / len(encoded_len)
+        # sim_v_attn = sim_v_attn / len(encoded_len)
+
+        # # print("loss_attn: ", loss_attn)
+        # # print("loss_v_attn: ", loss_v_attn)
+        # # print("sim_attn: ", sim_attn)
+        # # print("sim_v_attn: ", sim_v_attn)
+
+
+        # loss_ctc = self.loss(
+        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        # )
+        
+        # loss_value = attn_loss + 0.001 * value_loss
+        loss_value = attn_loss
 
 
         # Add auxiliary losses, if registered
@@ -645,11 +673,8 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
 
         tensorboard_logs.update(
             {
-                'self-attention similarity': sim_attn,
-                'value-value similarity': sim_v_attn,
-                'ctc loss': loss_ctc,
-                'attn loss': loss_attn,
-                'value loss': loss_v_attn,
+                'attn loss': attn_loss,
+                # 'value loss': value_loss,
                 'train_loss': loss_value,
                 'learning_rate': self._optimizer.param_groups[0]['lr'],
                 'global_step': torch.tensor(self.trainer.global_step, dtype=torch.float32),
@@ -690,67 +715,89 @@ class EncDecCTCModel_SelfAttn(ASRModel, ExportableEncDecModel, ASRModuleMixin, I
         if self.is_interctc_enabled():
             AccessMixin.set_access_enabled(access_enabled=True)
 
-        signal, signal_len, transcript, transcript_len, filename, te_attn, te_value_attn = batch
+        signal, signal_len, transcript, transcript_len, filename, te_attn, te_value = batch
         if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
             log_probs, encoded_len, predictions = self.forward(
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions, st_attn, st_value_attn = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, predictions, st_attn, st_value = self.forward(input_signal=signal, input_signal_length=signal_len)
 
+
+        # shape matching (B, H, T, T)
+        if te_attn.shape[-1] != st_attn.shape[-1]:
+           te_attn = te_attn[:, :, :st_attn.shape[-1], :st_attn.shape[-1]]
+        # # shape matching (B, H, T, .)
+        # if te_value.shape[-2] != st_value.shape[-2]:
+        #    te_value = te_value[:, :, :st_value.shape[-2], :]
+
+        # self-attention distillation loss
+        attn_error = te_attn - st_attn 
+        attn_loss = torch.mean(
+            torch.sum(torch.norm(attn_error, p=2, dim=-1).pow(2),
+                      dim=-1)
+            )
+
+        # # value distillation loss
+        # st_value = self.st_to_te_dim(st_value)
+        # value_error = te_value - st_value
+        # value_loss = torch.mean(
+        #     torch.sum(torch.norm(value_error, p=2, dim=-1).pow(2),
+        #                 dim=-1)
+        #     )
+
+        # loss_value = attn_loss + 0.001 * value_loss
+        loss_value = attn_loss
         
-        # jykang
-        # Self Attention distillation loss > loss_attn
-        # Self Value Attention distillation loss > loss_v_attn
-        import torch.nn.functional as F
-        attn_loss = torch.nn.KLDivLoss(reduction='batchmean')
+        # # jykang
+        # # Self Attention distillation loss > loss_attn
+        # # Self Value Attention distillation loss > loss_v_attn
+        # import torch.nn.functional as F
+        # attn_loss = torch.nn.KLDivLoss(reduction='batchmean')
 
-        # frame length of ith sample in the batch -> encoded_len[i]
-        # batch_size = len(encoded_len)
-        loss_attn = 0
-        loss_v_attn = 0
-        sim_attn = 0
-        sim_v_attn = 0
-        for i in range(len(encoded_len)):
-            st_attn_i = st_attn[i][:, :encoded_len[i], :encoded_len[i]]
-            te_attn_i = te_attn[i][:, :encoded_len[i], :encoded_len[i]]
-            st_value_attn_i = st_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
-            te_value_attn_i = te_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
+        # # frame length of ith sample in the batch -> encoded_len[i]
+        # # batch_size = len(encoded_len)
+        # loss_attn = 0
+        # loss_v_attn = 0
+        # sim_attn = 0
+        # sim_v_attn = 0
+        # for i in range(len(encoded_len)):
+        #     st_attn_i = st_attn[i][:, :encoded_len[i], :encoded_len[i]]
+        #     te_attn_i = te_attn[i][:, :encoded_len[i], :encoded_len[i]]
+        #     st_value_attn_i = st_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
+        #     te_value_attn_i = te_value_attn[i][:, :encoded_len[i], :encoded_len[i]]
 
-            loss_attn_i = attn_loss(torch.log(st_attn_i), te_attn_i) / encoded_len[i]
-            loss_attn += loss_attn_i
+        #     loss_attn_i = attn_loss(torch.log(st_attn_i), te_attn_i) / encoded_len[i]
+        #     loss_attn += loss_attn_i
 
-            loss_v_attn_i = attn_loss(F.log_softmax(st_value_attn_i), F.softmax(te_value_attn_i)) / encoded_len[i]
-            loss_v_attn += loss_v_attn_i
+        #     loss_v_attn_i = attn_loss(F.log_softmax(st_value_attn_i), F.softmax(te_value_attn_i)) / encoded_len[i]
+        #     loss_v_attn += loss_v_attn_i
 
-            # similarity check
-            norm_st = torch.norm(st_attn_i, dim=2)
-            norm_te = torch.norm(te_attn_i, dim=2)
-            sim_attn_i = torch.sum(st_attn_i * te_attn_i, dim=2) / (norm_st * norm_te)
-            sim_attn_i = torch.mean(sim_attn_i)
-            sim_attn += sim_attn_i
+        #     # similarity check
+        #     norm_st = torch.norm(st_attn_i, dim=2)
+        #     norm_te = torch.norm(te_attn_i, dim=2)
+        #     sim_attn_i = torch.sum(st_attn_i * te_attn_i, dim=2) / (norm_st * norm_te)
+        #     sim_attn_i = torch.mean(sim_attn_i)
+        #     sim_attn += sim_attn_i
 
-            norm_st_v = torch.norm(st_value_attn_i, dim=2)
-            norm_te_v = torch.norm(te_value_attn_i, dim=2)
-            sim_v_attn_i = torch.sum(st_value_attn_i * te_value_attn_i, dim=2) / (norm_st_v * norm_te_v)
-            sim_v_attn_i = torch.mean(sim_v_attn_i)
-            sim_v_attn += sim_v_attn_i
-
-
-        loss_attn = loss_attn / len(encoded_len)
-        loss_v_attn = loss_v_attn / len(encoded_len)
-        sim_attn = sim_attn / len(encoded_len)
-        sim_v_attn = sim_v_attn / len(encoded_len)
+        #     norm_st_v = torch.norm(st_value_attn_i, dim=2)
+        #     norm_te_v = torch.norm(te_value_attn_i, dim=2)
+        #     sim_v_attn_i = torch.sum(st_value_attn_i * te_value_attn_i, dim=2) / (norm_st_v * norm_te_v)
+        #     sim_v_attn_i = torch.mean(sim_v_attn_i)
+        #     sim_v_attn += sim_v_attn_i
 
 
-        loss_ctc = self.loss(
-            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
-        )
+        # loss_attn = loss_attn / len(encoded_len)
+        # loss_v_attn = loss_v_attn / len(encoded_len)
+        # sim_attn = sim_attn / len(encoded_len)
+        # sim_v_attn = sim_v_attn / len(encoded_len)
+
+
+        # loss_ctc = self.loss(
+        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        # )
         
-        # loss_value = loss_attn + loss_v_attn
-        # loss_value = loss_ctc
-        # loss_value = loss_value_ctc + 0.1 * loss_value_attn
-        loss_value = loss_ctc + loss_attn + loss_v_attn
+        # loss_value = loss_ctc + loss_attn + loss_v_attn
 
 
         loss_value, metrics = self.add_interctc_losses(

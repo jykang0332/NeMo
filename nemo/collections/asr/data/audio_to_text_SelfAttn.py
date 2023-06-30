@@ -59,7 +59,7 @@ def _speech_collate_fn_SelfAttn(batch, pad_id):
     """
     packed_batch = list(zip(*batch))
     if len(packed_batch) == 7:
-        _, audio_lengths, _, tokens_lengths, filename, self_attn, self_value_attn = packed_batch
+        _, audio_lengths, _, tokens_lengths, filename, self_attn, value = packed_batch
     elif len(packed_batch) == 4:
         sample_ids = None
         _, audio_lengths, _, tokens_lengths = packed_batch
@@ -77,23 +77,21 @@ def _speech_collate_fn_SelfAttn(batch, pad_id):
     for i in range(len(self_attn)):
         max_attn_len = max(max_attn_len, self_attn[i].shape[1])
     
-    # Compute max_value_attn_len
-    max_value_attn_len = 0
-    for i in range(len(self_value_attn)):
-        max_value_attn_len = max(max_value_attn_len, self_value_attn[i].shape[1])
 
-    # print(self_value_attn[0].shape)
-    # print(self_value_attn[1].shape)
-    # print(self_value_attn[2].shape)
-    # print(self_value_attn[3].shape)
-    # print(max_value_attn_len)
+    # print(self_attn[0].shape)
+    # print(self_attn[1].shape)
+    # print(self_attn[2].shape)
+    # print(max_attn_len)
+
+    # self_attn = (H, T, T)
+    # value = (H, T, d_k)
 
 
     audio_signal, tokens = [], []
     self_attn = []
-    self_value_attn = []
+    value = []
     for b in batch:
-        sig, sig_len, tokens_i, tokens_i_len, _, self_attn_i, self_v_attn_i = b
+        sig, sig_len, tokens_i, tokens_i_len, _, self_attn_i, v_i = b
 
         if has_audio:
             sig_len = sig_len.item()
@@ -108,30 +106,30 @@ def _speech_collate_fn_SelfAttn(batch, pad_id):
             tokens_i = torch.nn.functional.pad(tokens_i, pad, value=pad_id)
         tokens.append(tokens_i)
 
-        # self attn padding
-        # make sure all self attn have the same shape
+        # self_attn padding
+        # make sure all self_attns have the same shape
         self_attn_i_len = self_attn_i.shape[1]
         if self_attn_i_len < max_attn_len:
             pad = (0, max_attn_len - self_attn_i_len, 0, max_attn_len - self_attn_i_len)
             self_attn_i = torch.nn.functional.pad(self_attn_i, pad, value=0)
         self_attn.append(self_attn_i)
 
-        # self value attn padding
-        # make sure all self attn have the same shape
-        self_v_attn_i_len = self_v_attn_i.shape[1]
-        if self_v_attn_i_len < max_value_attn_len:
-            pad = (0, max_value_attn_len - self_v_attn_i_len, 0, max_value_attn_len - self_v_attn_i_len)
-            self_v_attn_i = torch.nn.functional.pad(self_v_attn_i, pad, value=0)
-        self_value_attn.append(self_v_attn_i)
+        # value padding
+        # make sure all values have the same shape
+        v_i = v_i.transpose(1, 2) # (H, d_k, T)
+        v_i_len = v_i.shape[2]
+        if v_i_len < max_attn_len:
+            pad = (0, max_attn_len - v_i_len)
+            v_i = torch.nn.functional.pad(v_i, pad, value=0)
+        value.append(v_i)
 
     
     self_attn = torch.stack(self_attn)
-    self_value_attn = torch.stack(self_value_attn)
-    # print(max_attn_len)
-    # print(self_attn.shape)
-    # print(max_value_attn_len)
-    # print(self_value_attn.shape)
+    value = torch.stack(value)
+    value = value.transpose(2, 3)
 
+    # self_attn = (B, H, T, T)
+    # value = (B, H, T, d_k)
 
     if has_audio:
         audio_signal = torch.stack(audio_signal)
@@ -141,13 +139,8 @@ def _speech_collate_fn_SelfAttn(batch, pad_id):
     tokens = torch.stack(tokens)
     tokens_lengths = torch.stack(tokens_lengths)
 
-    # if sample_ids is None:
-    #     return audio_signal, audio_lengths, tokens, tokens_lengths
-    # else:
-    #     sample_ids = torch.tensor(sample_ids, dtype=torch.int32)
-    #     return audio_signal, audio_lengths, tokens, tokens_lengths, sample_ids
 
-    return audio_signal, audio_lengths, tokens, tokens_lengths, filename, self_attn, self_value_attn
+    return audio_signal, audio_lengths, tokens, tokens_lengths, filename, self_attn, value
 
 
 class ASRManifestProcessor:
@@ -484,18 +477,16 @@ class _AudioTextDataset_SelfAttn(Dataset):
         # jykang
         # Load filename and Self attention map
         filename = os.path.splitext(os.path.basename(sample.audio_file))[0]
-        selfattn_path = os.path.join("/home/jykang/NeMo/data/self_attn/Librispeech_self_attn/", filename) + ".npy"
+        selfattn_path = os.path.join("/home/jykang/NeMo/data/QKV/Self_Attn/Librispeech_Self_Attn/", filename) + ".npy"
         self_attn = np.load(selfattn_path)
-        self_attn = torch.tensor(self_attn)
-        self_attn = self_attn.squeeze(0) # (1, H, T, T) -> (H, T, T)
+        self_attn = torch.tensor(self_attn) # (H, T, T)
 
 
         # jykang
-        # Load Self value attention map
-        self_value_attn_path = os.path.join("/home/jykang/NeMo/data/self_value_attn/Librispeech_self_value_attn/", filename) + ".npy"
+        # Load Value
+        self_value_attn_path = os.path.join("/home/jykang/NeMo/data/QKV/Value/Librispeech_Value/", filename) + ".npy"
         self_value_attn = np.load(self_value_attn_path)
-        self_value_attn = torch.tensor(self_value_attn)
-        self_value_attn = self_value_attn.squeeze(0) # (1, H, T, T) -> (H, T, T)
+        self_value_attn = torch.tensor(self_value_attn) # (H, T, d_k), d_k = n_feat / n_head
 
 
 

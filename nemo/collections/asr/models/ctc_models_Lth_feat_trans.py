@@ -23,6 +23,8 @@ from omegaconf import DictConfig, OmegaConf, open_dict
 from pytorch_lightning import Trainer
 from tqdm.auto import tqdm
 
+import numpy as np
+
 from nemo.collections.asr.data import audio_to_text_dataset
 from nemo.collections.asr.data.audio_to_text_dali import AudioToCharDALIDataset, DALIOutputs
 from nemo.collections.asr.losses.ctc import CTCLoss
@@ -109,6 +111,13 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         # Adapter modules setup (from ASRAdapterModelMixin)
         self.setup_adapters()
 
+        # Check
+        # Extracting features or not
+        # self.feature_extract = False
+        self.te_Lth_feature_extract = True
+        self.path = "/home/jykang/NeMo/data/Lth_feature_new/train_clean_100"
+
+
     @torch.no_grad()
     def transcribe(
         self,
@@ -192,35 +201,52 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                     config['augmentor'] = augmentor
 
                 temporary_datalayer = self._setup_transcribe_dataloader(config)
+                i = 0
                 for test_batch in tqdm(temporary_datalayer, desc="Transcribing"):
-                    logits, logits_len, greedy_predictions = self.forward(
-                        input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
-                    )
-                    if logprobs:
-                        # dump log probs per file
-                        for idx in range(logits.shape[0]):
-                            lg = logits[idx][: logits_len[idx]]
-                            hypotheses.append(lg.cpu().numpy())
-                    else:
-                        current_hypotheses, all_hyp = self.decoding.ctc_decoder_predictions_tensor(
-                            logits, decoder_lengths=logits_len, return_hypotheses=return_hypotheses,
+                    # jykang
+                    # For feature extract
+                    if self.te_Lth_feature_extract:
+                        logits, logits_len, greedy_predictions, te_encoded = self.forward(
+                            input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
                         )
+                    else:
+                        logits, logits_len, greedy_predictions = self.forward(
+                            input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
+                        )
+                    
 
-                        if return_hypotheses:
-                            # dump log probs per file
-                            for idx in range(logits.shape[0]):
-                                current_hypotheses[idx].y_sequence = logits[idx][: logits_len[idx]]
-                                if current_hypotheses[idx].alignments is None:
-                                    current_hypotheses[idx].alignments = current_hypotheses[idx].y_sequence
+                    if self.te_Lth_feature_extract:
+                        base_file_name = os.path.basename(paths2audio_files[i])
+                        filename = os.path.splitext(base_file_name)[0]
+                        filepath = os.path.join(self.path, filename)
+                        np.save(filepath, te_encoded.squeeze(0).cpu().numpy())
+                        i += 1
 
-                        if all_hyp is None:
-                            hypotheses += current_hypotheses
-                        else:
-                            hypotheses += all_hyp
 
-                    del greedy_predictions
-                    del logits
-                    del test_batch
+                    # if logprobs:
+                    #     # dump log probs per file
+                    #     for idx in range(logits.shape[0]):
+                    #         lg = logits[idx][: logits_len[idx]]
+                    #         hypotheses.append(lg.cpu().numpy())
+                    # else:
+                    #     current_hypotheses, all_hyp = self.decoding.ctc_decoder_predictions_tensor(
+                    #         logits, decoder_lengths=logits_len, return_hypotheses=return_hypotheses,
+                    #     )
+                    #     if return_hypotheses:
+                    #         # dump log probs per file
+                    #         for idx in range(logits.shape[0]):
+                    #             current_hypotheses[idx].y_sequence = logits[idx][: logits_len[idx]]
+                    #             if current_hypotheses[idx].alignments is None:
+                    #                 current_hypotheses[idx].alignments = current_hypotheses[idx].y_sequence
+                    #     if all_hyp is None:
+                    #         hypotheses += current_hypotheses
+                    #     else:
+                    #         hypotheses += all_hyp
+
+                    # del greedy_predictions
+                    # del logits
+                    # del test_batch
+
         finally:
             # set mode back to its original value
             self.train(mode=mode)
@@ -231,7 +257,10 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 self.decoder.unfreeze()
             logging.set_verbosity(logging_level)
 
-        return hypotheses
+        if self.te_Lth_feature_extract:
+            return i
+        else:
+            return hypotheses
 
     def change_vocabulary(self, new_vocabulary: List[str], decoding_cfg: Optional[DictConfig] = None):
         """
@@ -528,11 +557,20 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         log_probs = self.decoder(encoder_output=encoded)
         greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
 
-        return (
+
+        if self.te_Lth_feature_extract:
+            return (
             log_probs,
             encoded_len,
             greedy_predictions,
+            encoded
         )
+        else:
+            return (
+                log_probs,
+                encoded_len,
+                greedy_predictions,
+            )
 
     # PTL-specific methods
     def training_step(self, batch, batch_nb):

@@ -117,7 +117,7 @@ class MultiHeadAttention_qkv(nn.Module):
         returns:
             value (torch.Tensor): transformed `value` (batch, time2, d_model) weighted by the attention scores
             # jykang
-            p_attn(torch.Tensor) : attentiom map (batch, head, time1, time2)
+            attn(torch.Tensor) : attentiom map (batch, head, time1, time2)
         """
         n_batch = value.size(0)
         if mask is not None:
@@ -157,7 +157,7 @@ class MultiHeadAttention_qkv(nn.Module):
             scores = torch.matmul(q, k.transpose(-2, -1)) / self.s_d_k
             out, attn = self.forward_attention(v, scores, mask)
 
-        return out, attn
+        return out
     
 
     def update_cache(self, key, value, query, cache, cache_next):
@@ -263,8 +263,13 @@ class RelPositionMultiHeadAttention_qkv(MultiHeadAttention_qkv):
             # value scaled dot product attention
             # v = (batch, head, time2, d_k)
             value_attn = torch.matmul(v, v.transpose(-2, -1)) / self.s_d_k # (batch, head, time2, time2)
+            value_attn = value_attn.squeeze(0) # (head, time, time)
 
-        return out, attn, value_attn
+            # Q = q.transpose(1, 2).squeeze(0) # (head, time, d_k)
+            # K = k.squeeze(0) # (head, time, d_k)
+            # V = v.squeeze(0) # (head, time, d_k)
+
+        return out, attn.squeeze(0), value_attn, q.transpose(1,2).squeeze(0), k.squeeze(0), v.squeeze(0)
 
 
 class RelPositionMultiHeadAttentionLongformer_qkv(RelPositionMultiHeadAttention_qkv):

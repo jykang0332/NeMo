@@ -173,7 +173,7 @@ class ConformerLayer_qkv(torch.nn.Module, AdapterModuleMixin, AccessMixin):
 
         x = self.norm_self_att(residual)
         if self.self_attention_model == 'rel_pos':
-            x, attn, value_attn = self.self_attn(
+            x, attn, value_attn, Q, K, V = self.self_attn(
                 query=x,
                 key=x,
                 value=x,
@@ -233,7 +233,7 @@ class ConformerLayer_qkv(torch.nn.Module, AdapterModuleMixin, AccessMixin):
         if self.is_access_enabled() and self.access_cfg.get('save_encoder_tensors', False):
             self.register_accessible_tensor(name='encoder', tensor=x)
 
-        return x, attn, value_attn
+        return x, attn, value_attn, Q, K, V
 
     def forward_single_enabled_adapter_(
         self,
