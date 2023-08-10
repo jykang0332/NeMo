@@ -33,8 +33,8 @@ model:
 
   model_defaults:
     enc_hidden: ${model.encoder.d_model}
-    pred_hidden: 640
-    joint_hidden: 640
+    pred_hidden: 320
+    joint_hidden: 320
 
     # variables for TDT configs.
     tdt_durations: [0, 1, 2, 3, 4]
