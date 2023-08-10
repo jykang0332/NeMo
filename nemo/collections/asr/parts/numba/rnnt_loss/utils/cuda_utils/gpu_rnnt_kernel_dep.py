@@ -69,6 +69,7 @@ def logp_duration(acts: torch.Tensor, maxT: int, maxU: int, num_durations: int, 
     col = (mb * maxT + t) * maxU + u
     return acts[col * num_durations + v]
 
+# duration_acts, maxT, maxU, num_durations, b, t - durations[i], u, i
 
 @cuda.jit()
 def compute_alphas_kernel(
@@ -966,13 +967,17 @@ def compute_tdt_alphas_kernel(
                         alphas[offset + t * maxU + u] = rnnt_helper.log_sum_exp(
                             alphas[offset + t * maxU + u],  # the current alpha value
                             alphas[offset + (t - durations[i]) * maxU + u]  # alpha(t - duration, u)
-                            + logp(
-                                denom, acts, maxT, maxU, alphabet_size, b, t - durations[i], u, blank_
-                            )  # logp of blank emission
-                            - sigma  #  logit under-normalization
+                            # + logp(
+                            #     denom, acts, maxT, maxU, alphabet_size, b, t - durations[i], u, blank_
+                            # )  # logp of blank emission
+                            # - sigma  #  logit under-normalization
+                            # + logp_duration(
+                            #     duration_acts, maxT, maxU, num_durations, b, t - durations[i], u, i
+                            # ),  # logp of duration
                             + logp_duration(
-                                duration_acts, maxT, maxU, num_durations, b, t - durations[i], u, i
-                            ),  # logp of duration
+                                acts, maxT, maxU, alphabet_size * len(durations), b, t - durations[i], u, (durations[i] + 1) * alphabet_size - 1
+                            )
+                            - sigma # logit under-normalization
                         )
                     else:
                         break  # since durations are in ascending order, when we encounter a duration that is too large, then
@@ -983,13 +988,17 @@ def compute_tdt_alphas_kernel(
             if t == 0:
                 alphas[offset + u] = (
                     alphas[offset + u - 1]  # alpha(t, u - 1)
-                    + logp(
-                        denom, acts, maxT, maxU, alphabet_size, b, t, u - 1, labels[u - 1]
-                    )  # logp of token emission
-                    - sigma  # logit under-normalization
+                    # + logp(
+                    #     denom, acts, maxT, maxU, alphabet_size, b, t, u - 1, labels[u - 1]
+                    # )  # logp of token emission
+                    # - sigma  # logit under-normalization
+                    # + logp_duration(
+                    #     duration_acts, maxT, maxU, num_durations, b, t, u - 1, 0
+                    # )  # t = 0, so it must be duration = 0. Therefore the last argument passed to logp_duration() is 0.
                     + logp_duration(
-                        duration_acts, maxT, maxU, num_durations, b, t, u - 1, 0
-                    )  # t = 0, so it must be duration = 0. Therefore the last argument passed to logp_duration() is 0.
+                        acts, maxT, maxU, alphabet_size * len(durations), b, t, u - 1, labels[u - 1]
+                    ) # d == 0
+                    - sigma
                 )
 
             # now we have t != 0 and u != 0, and we need to consider both non-blank and blank emissions.
@@ -1000,13 +1009,17 @@ def compute_tdt_alphas_kernel(
                         no_emit = rnnt_helper.log_sum_exp(
                             no_emit,  # current score
                             alphas[offset + (t - durations[i]) * maxU + u]  # alpha(t - duration, u)
-                            + logp(
-                                denom, acts, maxT, maxU, alphabet_size, b, t - durations[i], u, blank_
-                            )  # logp of blank emission
-                            - sigma  #  logit under-normalization
+                            # + logp(
+                            #     denom, acts, maxT, maxU, alphabet_size, b, t - durations[i], u, blank_
+                            # )  # logp of blank emission
+                            # - sigma  #  logit under-normalization
+                            # + logp_duration(
+                            #     duration_acts, maxT, maxU, num_durations, b, t - durations[i], u, i
+                            # ),  # logp of duration
                             + logp_duration(
-                                duration_acts, maxT, maxU, num_durations, b, t - durations[i], u, i
-                            ),  # logp of duration
+                                acts, maxT, maxU, alphabet_size * len(durations), b, t - durations[i], u, (durations[i] + 1) * alphabet_size - 1
+                            )
+                            - sigma
                         )
                     else:
                         break  # we can exit the loop early here, same as the case for u == 0 above.
@@ -1017,13 +1030,17 @@ def compute_tdt_alphas_kernel(
                         emit = rnnt_helper.log_sum_exp(
                             emit,  # current score
                             alphas[offset + (t - durations[i]) * maxU + u - 1]  # alpha(t - duration, u - 1)
-                            + logp(
-                                denom, acts, maxT, maxU, alphabet_size, b, t - durations[i], u - 1, labels[u - 1]
-                            )  # logp of non-blank emission
-                            - sigma  #  logit under-normalization
+                            # + logp(
+                            #     denom, acts, maxT, maxU, alphabet_size, b, t - durations[i], u - 1, labels[u - 1]
+                            # )  # logp of non-blank emission
+                            # - sigma  #  logit under-normalization
+                            # + logp_duration(
+                            #     duration_acts, maxT, maxU, num_durations, b, t - durations[i], u - 1, i
+                            # ),  # logp of duration
                             + logp_duration(
-                                duration_acts, maxT, maxU, num_durations, b, t - durations[i], u - 1, i
-                            ),  # logp of duration
+                                acts, maxT, maxU, alphabet_size * len(durations), b, t - durations[i], u - 1, durations[i] * alphabet_size + labels[u - 1]
+                            )
+                            - sigma
                         )
                     else:
                         break  # we can exit the loop early here, same as the case for u == 0 above.
@@ -1040,9 +1057,13 @@ def compute_tdt_alphas_kernel(
         # first we consider duration = 1
         loglike = (
             alphas[offset + (T - 1) * maxU + U - 1]
-            + logp(denom, acts, maxT, maxU, alphabet_size, b, T - 1, U - 1, blank_)
+            # + logp(denom, acts, maxT, maxU, alphabet_size, b, T - 1, U - 1, blank_)
+            # - sigma
+            # + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - 1, U - 1, 1)
+            + logp_duration(
+                acts, maxT, maxU, alphabet_size * len(durations), b, T - 1, U - 1, (durations[1] + 1) * alphabet_size - 1
+            )
             - sigma
-            + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - 1, U - 1, 1)
         )
 
         # then we add the scores for duration > 1, if such durations are possible given the audio lengths.
@@ -1050,9 +1071,13 @@ def compute_tdt_alphas_kernel(
             if T >= durations[i]:
                 big_blank_loglike = (
                     alphas[offset + (T - durations[i]) * maxU + U - 1]
-                    + logp(denom, acts, maxT, maxU, alphabet_size, b, T - durations[i], U - 1, blank_)
+                    # + logp(denom, acts, maxT, maxU, alphabet_size, b, T - durations[i], U - 1, blank_)
+                    # - sigma
+                    # + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - durations[i], U - 1, i)
+                    + logp_duration(
+                        acts, maxT, maxU, alphabet_size * len(durations), b, T - durations[i], U - 1, (durations[i] + 1) * alphabet_size - 1
+                    )
                     - sigma
-                    + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - durations[i], U - 1, i)
                 )
                 loglike = rnnt_helper.log_sum_exp(loglike, big_blank_loglike)
             else:
@@ -1123,9 +1148,13 @@ def compute_tdt_betas_kernel(
     # Initilize beta[b, t=T-1, u=U-1] for all b in B with log_probs[b, t=T-1, u=U-1, blank]
     if u == 0:
         betas[offset + (T - 1) * maxU + U - 1] = (
-            logp(denom, acts, maxT, maxU, alphabet_size, b, T - 1, U - 1, blank_)
+            # logp(denom, acts, maxT, maxU, alphabet_size, b, T - 1, U - 1, blank_)
+            # - sigma
+            # + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - 1, U - 1, 1)
+            logp_duration(
+                acts, maxT, maxU, alphabet_size * len(durations), b, T - 1, U - 1, durations[i] * alphabet_size + labels[U - 1]
+            )
             - sigma
-            + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - 1, U - 1, 1)
         )
 
     # sync until all betas are initialized

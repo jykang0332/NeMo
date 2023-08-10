@@ -20,3 +20,6 @@ from nemo.collections.asr.losses.ssl_losses.contrastive import ContrastiveLoss
 from nemo.collections.asr.losses.ssl_losses.ctc import CTCLossForSSL
 from nemo.collections.asr.losses.ssl_losses.mlm import MLMLoss
 from nemo.collections.asr.losses.ssl_losses.rnnt import RNNTLossForSSL
+
+from nemo.collections.asr.losses.rnnt_dep import RNNTLoss_dep, resolve_rnnt_default_loss_name
+from nemo.collections.asr.parts.numba.rnnt_loss import TDTLossNumba_dep

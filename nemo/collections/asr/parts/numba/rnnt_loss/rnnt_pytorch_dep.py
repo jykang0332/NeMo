@@ -31,10 +31,12 @@ import torch
 from torch.autograd import Function
 from torch.nn import Module
 
-from nemo.collections.asr.parts.numba.rnnt_loss import rnnt
+# from nemo.collections.asr.parts.numba.rnnt_loss import rnnt
+from nemo.collections.asr.parts.numba.rnnt_loss import rnnt_dep
+
 from nemo.collections.asr.parts.numba.rnnt_loss.utils.cpu_utils import cpu_rnnt
 
-__all__ = ['rnnt_loss', 'RNNTLossNumba', 'MultiblankRNNTLossNumba', 'TDTLossNumba']
+__all__ = ['rnnt_loss', 'RNNTLossNumba', 'MultiblankRNNTLossNumba', 'TDTLossNumba_dep']
 
 
 class _RNNTNumba(Function):
@@ -54,7 +56,7 @@ class _RNNTNumba(Function):
         if clamp < 0:
             raise ValueError("`clamp` must be 0.0 or positive float value.")
 
-        loss_func = rnnt.rnnt_loss_gpu if is_cuda else rnnt.rnnt_loss_cpu
+        loss_func = rnnt_dep.rnnt_loss_gpu if is_cuda else rnnt_dep.rnnt_loss_cpu
         grads = torch.zeros_like(acts) if acts.requires_grad else None
         minibatch_size = acts.size(0)
         costs = torch.zeros(minibatch_size, device=acts.device, dtype=torch.float32)
@@ -91,7 +93,7 @@ class _RNNTNumba(Function):
             return ctx.grads.mul_(grad_output), None, None, None, None, None, None, None
 
 
-class _TDTNumba(Function):
+class _TDTNumba_dep(Function):
     """
     Numba class for Token-and-Duration Transducer (TDT) loss (https://arxiv.org/abs/2304.06795)
     """
@@ -134,12 +136,13 @@ class _TDTNumba(Function):
             raise ValueError("`clamp` must be 0.0 or positive float value.")
 
         if is_cuda:
-            loss_func = rnnt.tdt_loss_gpu
+            loss_func = rnnt_dep.tdt_loss_gpu_dep
         else:
             raise ValueError("TDT is not yet implemented for non CUDA computation.")
 
         label_grads = torch.zeros_like(label_acts) if label_acts.requires_grad else None
-        duration_grads = torch.zeros_like(duration_acts) if duration_acts.requires_grad else None
+        # duration_grads = torch.zeros_like(duration_acts) if duration_acts.requires_grad else None
+        duration_grads = None
         minibatch_size = label_acts.size(0)
         costs = torch.zeros(minibatch_size, device=label_acts.device, dtype=label_acts.dtype)
 
@@ -168,7 +171,7 @@ class _TDTNumba(Function):
 
                 if label_grads is not None:
                     label_grads /= minibatch_size
-                    duration_grads /= minibatch_size
+                    # duration_grads /= minibatch_size
 
         ctx.label_grads = label_grads
         ctx.duration_grads = duration_grads
@@ -181,7 +184,9 @@ class _TDTNumba(Function):
             grad_output = grad_output.view(-1, 1, 1, 1).to(ctx.label_grads)
             return (
                 ctx.label_grads.mul_(grad_output),
-                ctx.duration_grads.mul_(grad_output),
+                # jykang
+                # ctx.duration_grads.mul_(grad_output),
+                None,
                 None,
                 None,
                 None,
@@ -220,7 +225,7 @@ class _MultiblankRNNTNumba(Function):
             raise ValueError("`clamp` must be 0.0 or positive float value.")
 
         if is_cuda:
-            loss_func = rnnt.multiblank_rnnt_loss_gpu
+            loss_func = rnnt_dep.multiblank_rnnt_loss_gpu
         else:
             raise NotImplementedError()
 
@@ -384,7 +389,7 @@ def tdt_loss(
         # log_softmax is computed within GPU version.
         acts = torch.nn.functional.log_softmax(acts, -1)
 
-    return _TDTNumba.apply(acts, labels, act_lens, label_lens, blank, durations, reduction, fastemit_lambda, clamp)
+    return _TDTNumba_dep.apply(acts, labels, act_lens, label_lens, blank, durations, reduction, fastemit_lambda, clamp)
 
 
 class RNNTLossNumba(Module):
@@ -508,7 +513,7 @@ class MultiblankRNNTLossNumba(Module):
         )
 
 
-class TDTLossNumba(Module):
+class TDTLossNumba_dep(Module):
     """
     Parameters:
         blank (int): standard blank label.
@@ -539,13 +544,13 @@ class TDTLossNumba(Module):
         sigma: float = 0.0,
         omega: float = 0.0,
     ):
-        super(TDTLossNumba, self).__init__()
+        super(TDTLossNumba_dep, self).__init__()
         self.blank = blank
         self.durations = durations if durations is not None else []
         self.fastemit_lambda = fastemit_lambda
         self.clamp = float(clamp) if clamp > 0 else 0.0
         self.reduction = reduction
-        self.loss = _TDTNumba.apply
+        self.loss = _TDTNumba_dep.apply
         self.sigma = sigma
         self.omega = omega
 
@@ -556,23 +561,26 @@ class TDTLossNumba(Module):
         act_lens: Tensor of size (batch) containing size of each output sequence from the network
         label_lens: Tensor of (batch) containing label length of each example
         """
-
         # TODO(hainan): in the future, we could further optimize this so that we don't need to
         # make contiguous copies of the acts tensor.
-        label_acts, duration_acts = torch.split(
-            acts, [acts.shape[-1] - len(self.durations), len(self.durations)], dim=-1
-        )
-        
+        # label_acts, duration_acts = torch.split(
+        #     acts, [acts.shape[-1] - len(self.durations), len(self.durations)], dim=-1
+        # )
         # print(acts.shape) -> (B, T, U, V)
         # print(self.durations) -> (0, 1, 2, 3, 4)
         # print(label_acts.shape) -> (B, T, U, V-5)
         # print(duration_acts.shape) -> (B, T, U, 5)
 
-        label_acts = label_acts.contiguous()
-        duration_acts = torch.nn.functional.log_softmax(duration_acts, dim=-1).contiguous()
+
+        acts = torch.nn.functional.log_softmax(acts, dim=-1).contiguous()
+        duration_acts = None
+
+        # label_acts = label_acts.contiguous()
+        # duration_acts = torch.nn.functional.log_softmax(duration_acts, dim=-1).contiguous()
 
         return self.loss(
-            label_acts,
+            # label_acts,
+            acts,
             duration_acts,
             labels,
             act_lens,
