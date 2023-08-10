@@ -4,7 +4,7 @@ nemo_experiments
 nemo_experiments_ctc
 
 # log and data files
-*.model
+# *.model
 *.pkl
 #*.ipynb
 output
