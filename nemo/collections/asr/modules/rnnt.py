@@ -1190,6 +1190,9 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
         self._num_extra_outputs = num_extra_outputs
         self._num_classes = num_classes + 1 + num_extra_outputs  # 1 is for blank
 
+        # jykang
+        self._num_classes_expanded = (num_classes + 1) * num_extra_outputs
+
         if experimental_fuse_loss_wer is not None:
             # Override fuse_loss_wer from deprecated argument
             fuse_loss_wer = experimental_fuse_loss_wer
@@ -1224,7 +1227,7 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
         dropout = jointnet.get('dropout', 0.0)
 
         self.pred, self.enc, self.joint_net = self._joint_net_modules(
-            num_classes=self._num_classes,  # add 1 for blank symbol
+            num_classes=self._num_classes_expanded,  # add 1 for blank symbol
             pred_n_hidden=self.pred_hidden,
             enc_n_hidden=self.encoder_hidden,
             joint_n_hidden=self.joint_hidden,

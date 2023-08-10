@@ -34,3 +34,5 @@ from nemo.collections.asr.models.rnnt_models import EncDecRNNTModel
 from nemo.collections.asr.models.slu_models import SLUIntentSlotBPEModel
 from nemo.collections.asr.models.ssl_models import SpeechEncDecSelfSupervisedModel
 from nemo.collections.asr.models.transformer_bpe_models import EncDecTransfModelBPE
+
+from nemo.collections.asr.losses.rnnt_dep import RNNTLoss_dep, resolve_rnnt_default_loss_name

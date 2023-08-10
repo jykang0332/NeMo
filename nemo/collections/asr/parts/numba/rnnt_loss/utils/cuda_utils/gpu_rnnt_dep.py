@@ -620,6 +620,9 @@ class GPUTDT_dep(GPURNNT):
             )
         else:
             # Compute alphas
+            print(label_acts.shape)
+            print(duration_acts)
+            exit()
             gpu_rnnt_kernel_dep.compute_tdt_alphas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
                 label_acts, 
                 duration_acts,
