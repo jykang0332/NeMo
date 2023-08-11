@@ -1152,7 +1152,7 @@ def compute_tdt_betas_kernel(
             # - sigma
             # + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - 1, U - 1, 1)
             logp_duration(
-                acts, maxT, maxU, alphabet_size * len(durations), b, T - 1, U - 1, durations[i] * alphabet_size + labels[U - 1]
+                acts, maxT, maxU, alphabet_size * len(durations), b, T - 1, U - 1, (durations[1] + 1) * alphabet_size - 1
             )
             - sigma
         )
@@ -1180,22 +1180,30 @@ def compute_tdt_betas_kernel(
                             betas[
                                 offset + (t + durations[i]) * maxU + U - 1
                             ]  # beta[t, U - 1] depends on the value beta[t + duration, U - 1] here.
-                            + logp(denom, acts, maxT, maxU, alphabet_size, b, t, U - 1, blank_)  # log prob of blank
+                            # + logp(denom, acts, maxT, maxU, alphabet_size, b, t, U - 1, blank_)  # log prob of blank
+                            # + logp_duration(
+                            #     duration_acts, maxT, maxU, num_durations, b, t, U - 1, i
+                            # )  # log prob of duration (durations[i])
+                            # - sigma,  # for logit undernormalization
                             + logp_duration(
-                                duration_acts, maxT, maxU, num_durations, b, t, U - 1, i
-                            )  # log prob of duration (durations[i])
-                            - sigma,  # for logit undernormalization
+                                acts, maxT, maxU, alphabet_size * len(durations), b, t, U - 1, (durations[i] + 1) * alphabet_size - 1
+                            )
+                            - sigma
                         )
                     elif t + durations[i] == T:
                         betas[offset + t * maxU + U - 1] = rnnt_helper.log_sum_exp(
                             betas[offset + t * maxU + U - 1],
                             # here we have one fewer term than the "if" block above. This could be seen as having "0" here since
                             # beta[t + duration, U - 1] isn't defined because t + duration is out of bound.
-                            logp(denom, acts, maxT, maxU, alphabet_size, b, t, U - 1, blank_)  # log prob of blank
+                            # logp(denom, acts, maxT, maxU, alphabet_size, b, t, U - 1, blank_)  # log prob of blank
+                            # + logp_duration(
+                            #     duration_acts, maxT, maxU, num_durations, b, t, U - 1, i
+                            # )  # log prob of duration (durations[i])
+                            # - sigma,  # for logit undernormalization. Basically every time sigma shows up is because of logit undernormalization.
                             + logp_duration(
-                                duration_acts, maxT, maxU, num_durations, b, t, U - 1, i
-                            )  # log prob of duration (durations[i])
-                            - sigma,  # for logit undernormalization. Basically every time sigma shows up is because of logit undernormalization.
+                                acts, maxT, maxU, alphabet_size * len(durations), b, t, U - 1, (durations[i] + 1) * alphabet_size - 1
+                            )
+                            - sigma
                         )
 
         elif u < U - 1:
@@ -1203,8 +1211,12 @@ def compute_tdt_betas_kernel(
                 # t == T - 1, so we only consider non-blank with duration 0. (Note, we can't have blank emissions with duration = 0)
                 betas[offset + (T - 1) * maxU + u] = (
                     betas[offset + (T - 1) * maxU + u + 1]
-                    + logp(denom, acts, maxT, maxU, alphabet_size, b, T - 1, u, labels[u])  # non-blank log prob
-                    + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - 1, u, 0)  # log prob of duration 0
+                    # + logp(denom, acts, maxT, maxU, alphabet_size, b, T - 1, u, labels[u])  # non-blank log prob
+                    # + logp_duration(duration_acts, maxT, maxU, num_durations, b, T - 1, u, 0)  # log prob of duration 0
+                    # - sigma
+                    + logp_duration(
+                        acts, maxT, maxU, alphabet_size * len(durations), b, T - 1, u, labels[u]
+                    )
                     - sigma
                 )
 
@@ -1216,9 +1228,13 @@ def compute_tdt_betas_kernel(
                         no_emit = rnnt_helper.log_sum_exp(
                             no_emit,
                             betas[offset + (t + durations[i]) * maxU + u]
-                            + logp(denom, acts, maxT, maxU, alphabet_size, b, t, u, blank_)
-                            + logp_duration(duration_acts, maxT, maxU, num_durations, b, t, u, i)
-                            - sigma,
+                            # + logp(denom, acts, maxT, maxU, alphabet_size, b, t, u, blank_)
+                            # + logp_duration(duration_acts, maxT, maxU, num_durations, b, t, u, i)
+                            # - sigma,
+                            + logp_duration(
+                                acts, maxT, maxU, alphabet_size * len(durations), b, t, u, (durations[i] + 1) * alphabet_size - 1
+                            )
+                            - sigma
                         )
 
                 emit = -INF
@@ -1227,9 +1243,13 @@ def compute_tdt_betas_kernel(
                         emit = rnnt_helper.log_sum_exp(
                             emit,
                             betas[offset + (t + durations[i]) * maxU + u + 1]
-                            + logp(denom, acts, maxT, maxU, alphabet_size, b, t, u, labels[u])
-                            + logp_duration(duration_acts, maxT, maxU, num_durations, b, t, u, i)
-                            - sigma,
+                            # + logp(denom, acts, maxT, maxU, alphabet_size, b, t, u, labels[u])
+                            # + logp_duration(duration_acts, maxT, maxU, num_durations, b, t, u, i)
+                            # - sigma,
+                            + logp_duration(
+                                acts, maxT, maxU, alphabet_size * len(durations), b, t, u, durations[i] * alphabet_size + labels[u]
+                            )
+                            - sigma
                         )
 
                 # combining all blank emissions and all non-blank emissions.
@@ -1323,24 +1343,24 @@ def compute_tdt_grad_kernel(
     # Look up gradient calculation from rnnt_numpy.compute_gradient()
 
     if t < T and u < U:
-        logpk_blank = (
-            denom[col] + acts[col * alphabet_size + blank_] - sigma
-        )  # whenever sigma is used, it is for logit under-normalization.
+        # logpk_blank = (
+        #     denom[col] + acts[col * alphabet_size + blank_] - sigma
+        # )  # whenever sigma is used, it is for logit under-normalization.
 
-        if idx < num_durations:
-            grad = 0.0
-            if t + durations[idx] < T and u < U - 1:  # for label
-                logpk_label = denom[col] + acts[col * alphabet_size + labels[u]] - sigma
-                grad -= math.exp(alphas[col] + betas[col + 1 + durations[idx] * maxU] + logpk_label - logll[mb])
+        # if idx < num_durations:
+        #     grad = 0.0
+        #     if t + durations[idx] < T and u < U - 1:  # for label
+        #         logpk_label = denom[col] + acts[col * alphabet_size + labels[u]] - sigma
+        #         grad -= math.exp(alphas[col] + betas[col + 1 + durations[idx] * maxU] + logpk_label - logll[mb])
 
-            if t + durations[idx] < T and idx > 0:  # for blank in the middle
-                grad -= math.exp(alphas[col] + betas[col + durations[idx] * maxU] + logpk_blank - logll[mb])
+        #     if t + durations[idx] < T and idx > 0:  # for blank in the middle
+        #         grad -= math.exp(alphas[col] + betas[col + durations[idx] * maxU] + logpk_blank - logll[mb])
 
-            if t + durations[idx] == T and idx >= 1 and u == U - 1:  # for blank as the last symbol
-                grad -= math.exp(alphas[col] + logpk_blank - logll[mb])
+        #     if t + durations[idx] == T and idx >= 1 and u == U - 1:  # for blank as the last symbol
+        #         grad -= math.exp(alphas[col] + logpk_blank - logll[mb])
 
-            grad = grad * math.exp(duration_acts[col * num_durations + idx])
-            duration_grads[col * num_durations + idx] = grad
+        #     grad = grad * math.exp(duration_acts[col * num_durations + idx])
+        #     duration_grads[col * num_durations + idx] = grad
 
         # For cuda kernels, maximum number of threads per block is limited to some value.
         # However, it may be the case that vocabulary size is larger than this limit

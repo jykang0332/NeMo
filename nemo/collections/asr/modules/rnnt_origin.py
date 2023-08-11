@@ -1190,6 +1190,7 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
         self._num_extra_outputs = num_extra_outputs
         self._num_classes = num_classes + 1 + num_extra_outputs  # 1 is for blank
 
+
         if experimental_fuse_loss_wer is not None:
             # Override fuse_loss_wer from deprecated argument
             fuse_loss_wer = experimental_fuse_loss_wer

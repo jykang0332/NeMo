@@ -600,9 +600,8 @@ class GPUTDT_dep(GPURNNT):
 
         ######## START EXECUTION ########
         # self.log_softmax(label_acts, denom)
-
         r = random.uniform(0, 1)
-        if r < self.omega:
+        if r < 0:
             # Compute alphas
             gpu_rnnt_kernel_dep.compute_alphas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
                 label_acts,
@@ -620,9 +619,6 @@ class GPUTDT_dep(GPURNNT):
             )
         else:
             # Compute alphas
-            print(label_acts.shape)
-            print(duration_acts)
-            exit()
             gpu_rnnt_kernel_dep.compute_tdt_alphas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
                 label_acts, 
                 duration_acts,
@@ -700,6 +696,8 @@ class GPUTDT_dep(GPURNNT):
                     durations,
                     self.num_durations,
                 )
+                print('!!!!!!!!!!')
+                exit()
 
                 # Compute gradient
                 grad_blocks_per_grid = self.minibatch_ * self.maxT_ * self.maxU_
