@@ -51,8 +51,8 @@ except (ImportError, ModuleNotFoundError):
     WARP_RNNT_AVAILABLE = False
 
 try:
-    from nemo.collections.asr.parts.numba.rnnt_loss import MultiblankRNNTLossNumba, RNNTLossNumba
-    from nemo.collections.asr.parts.numba.rnnt_loss import TDTLossNumba_dep
+    from nemo.collections.asr.parts.numba.rnnt_loss.rnnt_pytorch_dep import MultiblankRNNTLossNumba_dep, RNNTLossNumba_dep
+    from nemo.collections.asr.parts.numba.rnnt_loss.rnnt_pytorch_dep import TDTLossNumba_dep
 
     NUMBA_RNNT_AVAILABLE = True
 except (ImportError, ModuleNotFoundError):
@@ -264,7 +264,7 @@ def resolve_rnnt_loss_dep(loss_name: str, blank_idx: int, loss_kwargs: dict = No
 
         fastemit_lambda = loss_kwargs.pop('fastemit_lambda', 0.0)
         clamp = loss_kwargs.pop('clamp', -1.0)
-        loss_func = RNNTLossNumba(blank=blank_idx, reduction='none', fastemit_lambda=fastemit_lambda, clamp=clamp)
+        loss_func = RNNTLossNumba_dep(blank=blank_idx, reduction='none', fastemit_lambda=fastemit_lambda, clamp=clamp)
         _warn_unused_additional_kwargs(loss_name, loss_kwargs)
 
     elif loss_name == 'pytorch':
@@ -276,7 +276,7 @@ def resolve_rnnt_loss_dep(loss_name: str, blank_idx: int, loss_kwargs: dict = No
         clamp = loss_kwargs.pop('clamp', -1.0)
         big_blank_durations = loss_kwargs.pop('big_blank_durations', None)
         sigma = loss_kwargs.pop('sigma', 0.0)
-        loss_func = MultiblankRNNTLossNumba(
+        loss_func = MultiblankRNNTLossNumba_dep(
             blank=blank_idx,
             big_blank_durations=big_blank_durations,
             reduction='none',

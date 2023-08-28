@@ -1190,8 +1190,6 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
         self._num_extra_outputs = num_extra_outputs
         self._num_classes = num_classes + 1 + num_extra_outputs  # 1 is for blank
 
-        # jykang
-        self._num_classes_expanded = (num_classes + 1) * num_extra_outputs
 
         if experimental_fuse_loss_wer is not None:
             # Override fuse_loss_wer from deprecated argument
@@ -1223,16 +1221,20 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
         self.joint_hidden = jointnet['joint_hidden']
         self.activation = jointnet['activation']
 
+        self.dependence = jointnet.get('dependence', False)
+
         # Optional arguments
         dropout = jointnet.get('dropout', 0.0)
 
         self.pred, self.enc, self.joint_net = self._joint_net_modules(
-            num_classes=self._num_classes_expanded,  # add 1 for blank symbol
+            num_classes=self._num_classes,  # add 1 for blank symbol
             pred_n_hidden=self.pred_hidden,
             enc_n_hidden=self.encoder_hidden,
             joint_n_hidden=self.joint_hidden,
             activation=self.activation,
             dropout=dropout,
+            num_extra_outputs=num_extra_outputs,
+            dependence=self.dependence,
         )
 
         # Flag needed for RNNT export support
@@ -1352,7 +1354,7 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
 
                 else:
                     losses = None
-
+                
                 # Update WER for sub batch
                 if compute_wer:
                     sub_enc = sub_enc.transpose(1, 2)  # [B, T, D] -> [B, D, T]
@@ -1363,6 +1365,7 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
                     self.wer.update(sub_enc, sub_enc_lens, sub_transcripts, sub_transcript_lens)
 
                 del sub_enc, sub_transcripts, sub_enc_lens, sub_transcript_lens
+
 
             # Reduce over sub batches
             if losses is not None:
@@ -1449,7 +1452,7 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
 
         return res
 
-    def _joint_net_modules(self, num_classes, pred_n_hidden, enc_n_hidden, joint_n_hidden, activation, dropout):
+    def _joint_net_modules(self, num_classes, pred_n_hidden, enc_n_hidden, joint_n_hidden, activation, dropout, num_extra_outputs, dependence):
         """
         Prepare the trainable modules of the Joint Network
 
@@ -1461,6 +1464,13 @@ class RNNTJoint(rnnt_abstract.AbstractRNNTJoint, Exportable, AdapterModuleMixin)
             activation: Activation of the joint. Can be one of [relu, tanh, sigmoid]
             dropout: Dropout value to apply to joint.
         """
+        # num_extra != 0 and dep True > tdt_dep
+        # num_extra != 0 and dep False > tdt
+        # num_extra == 0 and dep True > impossible
+        # num_extra == 0 and dep False > rnnt 
+        if num_extra_outputs != 0 and dependence:
+            num_classes = (num_classes - num_extra_outputs) * num_extra_outputs
+            
         pred = torch.nn.Linear(pred_n_hidden, joint_n_hidden)
         enc = torch.nn.Linear(enc_n_hidden, joint_n_hidden)
 

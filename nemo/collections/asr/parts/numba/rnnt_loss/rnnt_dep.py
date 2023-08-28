@@ -309,7 +309,7 @@ def tdt_loss_gpu_dep(
 
     ### VIEW TENSORS AS VECTORS FOR POINTER INDEXING ###
     label_acts, label_acts_shape = rnnt_helper.flatten_tensor(label_acts)
-    # duration_acts, duration_acts_shape = rnnt_helper.flatten_tensor(duration_acts)
+    duration_acts, duration_acts_shape = rnnt_helper.flatten_tensor(duration_acts)
 
     wrapper = gpu_rnnt_dep.GPUTDT_dep(
         minibatch=minibatch_size,
@@ -344,15 +344,12 @@ def tdt_loss_gpu_dep(
     else:
         ### FLATTEN GRAD TENSOR ###
         label_grads, label_grads_shape = rnnt_helper.flatten_tensor(label_grads)
-        # duration_grads, duration_grads_shape = rnnt_helper.flatten_tensor(duration_grads)
-
+        duration_grads, duration_grads_shape = rnnt_helper.flatten_tensor(duration_grads)
         status = wrapper.cost_and_grad(
             label_acts=label_acts.data,
-            # duration_acts=duration_acts.data,
-            duration_acts = None,
+            duration_acts=duration_acts.data,
             label_grads=label_grads.data,
-            # duration_grads=duration_grads.data,
-            duration_grads = None,
+            duration_grads=duration_grads.data,
             costs=costs.data,
             pad_labels=labels.data,
             label_lengths=label_lengths.data,

@@ -36,10 +36,10 @@ from nemo.collections.asr.parts.numba.rnnt_loss import rnnt_dep
 
 from nemo.collections.asr.parts.numba.rnnt_loss.utils.cpu_utils import cpu_rnnt
 
-__all__ = ['rnnt_loss', 'RNNTLossNumba', 'MultiblankRNNTLossNumba', 'TDTLossNumba_dep']
+__all__ = ['rnnt_loss', 'RNNTLossNumba_dep', 'MultiblankRNNTLossNumba_dep', 'TDTLossNumba_dep']
 
 
-class _RNNTNumba(Function):
+class _RNNTNumba_dep(Function):
     @staticmethod
     def forward(ctx, acts, labels, act_lens, label_lens, blank, reduction, fastemit_lambda, clamp):
         """
@@ -141,8 +141,8 @@ class _TDTNumba_dep(Function):
             raise ValueError("TDT is not yet implemented for non CUDA computation.")
 
         label_grads = torch.zeros_like(label_acts) if label_acts.requires_grad else None
-        # duration_grads = torch.zeros_like(duration_acts) if duration_acts.requires_grad else None
-        duration_grads = None
+        duration_grads = torch.zeros_like(duration_acts) if duration_acts.requires_grad else None
+
         minibatch_size = label_acts.size(0)
         costs = torch.zeros(minibatch_size, device=label_acts.device, dtype=label_acts.dtype)
 
@@ -171,22 +171,29 @@ class _TDTNumba_dep(Function):
 
                 if label_grads is not None:
                     label_grads /= minibatch_size
-                    # duration_grads /= minibatch_size
+                    duration_grads /= minibatch_size
 
         ctx.label_grads = label_grads
         ctx.duration_grads = duration_grads
 
+        # print(labels[0])
+        # print(label_lens)
         return costs
 
     @staticmethod
     def backward(ctx, grad_output):
         if grad_output is not None and ctx.label_grads is not None:
+            # print(ctx.label_grads[0, :, 108, 0])
+            # print(ctx.label_grads[0, :, 109, 129 + 0])
+            # print(ctx.label_grads[0, :, 109, 129*2 + 0])
+            # print(ctx.label_grads[0, :, 109, 129*3 + 0])
+            # print(ctx.label_grads[0, :, 109, 129*4 + 0])
+            # print(grad_output)
             grad_output = grad_output.view(-1, 1, 1, 1).to(ctx.label_grads)
             return (
                 ctx.label_grads.mul_(grad_output),
                 # jykang
-                # ctx.duration_grads.mul_(grad_output),
-                None,
+                ctx.duration_grads.mul_(grad_output),
                 None,
                 None,
                 None,
@@ -200,7 +207,7 @@ class _TDTNumba_dep(Function):
             )
 
 
-class _MultiblankRNNTNumba(Function):
+class _MultiblankRNNTNumba_dep(Function):
     """
     Numba class for multi-blank transducer loss (https://arxiv.org/pdf/2211.03541.pdf)
     """
@@ -295,7 +302,7 @@ def rnnt_loss(
         # log_softmax is computed within GPU version.
         acts = torch.nn.functional.log_softmax(acts, -1)
 
-    return _RNNTNumba.apply(acts, labels, act_lens, label_lens, blank, reduction, fastemit_lambda, clamp)
+    return _RNNTNumba_dep.apply(acts, labels, act_lens, label_lens, blank, reduction, fastemit_lambda, clamp)
 
 
 def multiblank_rnnt_loss(
@@ -341,7 +348,7 @@ def multiblank_rnnt_loss(
         # log_softmax is computed within GPU version.
         acts = torch.nn.functional.log_softmax(acts, -1)
 
-    return _MultiblankRNNTNumba.apply(
+    return _MultiblankRNNTNumba_dep.apply(
         acts, labels, act_lens, label_lens, blank, big_blank_durations, reduction, fastemit_lambda, clamp
     )
 
@@ -392,7 +399,7 @@ def tdt_loss(
     return _TDTNumba_dep.apply(acts, labels, act_lens, label_lens, blank, durations, reduction, fastemit_lambda, clamp)
 
 
-class RNNTLossNumba(Module):
+class RNNTLossNumba_dep(Module):
     """
     Parameters:
         blank (int, optional): blank label. Default: 0.
@@ -406,12 +413,12 @@ class RNNTLossNumba(Module):
     """
 
     def __init__(self, blank=0, reduction='mean', fastemit_lambda: float = 0.0, clamp: float = -1):
-        super(RNNTLossNumba, self).__init__()
+        super(RNNTLossNumba_dep, self).__init__()
         self.blank = blank
         self.fastemit_lambda = fastemit_lambda
         self.clamp = float(clamp) if clamp > 0 else 0.0
         self.reduction = reduction
-        self.loss = _RNNTNumba.apply
+        self.loss = _RNNTNumba_dep.apply
 
     def forward(self, acts, labels, act_lens, label_lens):
         """
@@ -442,7 +449,7 @@ class RNNTLossNumba(Module):
         )
 
 
-class MultiblankRNNTLossNumba(Module):
+class MultiblankRNNTLossNumba_dep(Module):
     """
     Parameters:
         blank (int): standard blank label.
@@ -470,13 +477,13 @@ class MultiblankRNNTLossNumba(Module):
         clamp: float = -1,
         sigma: float = 0.0,
     ):
-        super(MultiblankRNNTLossNumba, self).__init__()
+        super(MultiblankRNNTLossNumba_dep, self).__init__()
         self.blank = blank
         self.big_blank_durations = big_blank_durations
         self.fastemit_lambda = fastemit_lambda
         self.clamp = float(clamp) if clamp > 0 else 0.0
         self.reduction = reduction
-        self.loss = _MultiblankRNNTNumba.apply
+        self.loss = _MultiblankRNNTNumba_dep.apply
         self.sigma = sigma
 
     def forward(self, acts, labels, act_lens, label_lens):
@@ -573,7 +580,8 @@ class TDTLossNumba_dep(Module):
 
 
         acts = torch.nn.functional.log_softmax(acts, dim=-1).contiguous()
-        duration_acts = None
+        # acts = acts.contiguous()
+        duration_acts = torch.zeros((acts.shape[0],1,1,1), requires_grad=True).contiguous().cuda()
 
         # label_acts = label_acts.contiguous()
         # duration_acts = torch.nn.functional.log_softmax(duration_acts, dim=-1).contiguous()

@@ -77,7 +77,7 @@ class EncDecRNNTModel_dep(ASRModel, ASRModuleMixin, ExportableEncDecModel):
         num_classes = self.joint.num_classes_with_blank - 1  # for standard RNNT and multi-blank
 
         if loss_name == 'tdt':
-            num_classes = num_classes - self.joint.num_extra_outputs        
+            num_classes = num_classes - self.joint.num_extra_outputs     
 
         self.loss = RNNTLoss_dep(
             num_classes=num_classes,

@@ -1060,7 +1060,6 @@ def compute_tdt_alphas_kernel(
 
         llForward[b] = loglike
 
-
 @cuda.jit()
 def compute_tdt_betas_kernel(
     acts: torch.Tensor,

@@ -178,6 +178,15 @@ class _TDTNumba(Function):
     @staticmethod
     def backward(ctx, grad_output):
         if grad_output is not None and ctx.label_grads is not None:
+            # print(grad_output)
+            # print(ctx.label_grads[0, :, 108, 0])
+            # print(ctx.label_grads[0, :, 1, 20])
+            # print(ctx.duration_grads[0, :, 108, 0])
+            # print(ctx.duration_grads[0, :, 108, 1])
+            # print(ctx.duration_grads[0, :, 108, 2])
+            # print(ctx.duration_grads[0, :, 108, 3])
+            # print(ctx.duration_grads[0, :, 108, 4])
+            # print(grad_output)
             grad_output = grad_output.view(-1, 1, 1, 1).to(ctx.label_grads)
             return (
                 ctx.label_grads.mul_(grad_output),

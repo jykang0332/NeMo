@@ -24,7 +24,7 @@ from nemo.collections.asr.parts.numba.rnnt_loss import rnnt_dep
 from nemo.collections.asr.parts.numba.rnnt_loss.utils.cuda_utils import gpu_rnnt_dep
 
 from nemo.collections.asr.parts.numba.rnnt_loss.rnnt_pytorch_dep import (
-    MultiblankRNNTLossNumba,
-    RNNTLossNumba,
+    MultiblankRNNTLossNumba_dep,
+    RNNTLossNumba_dep,
     TDTLossNumba_dep,
 )

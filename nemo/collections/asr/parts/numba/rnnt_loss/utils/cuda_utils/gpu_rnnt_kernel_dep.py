@@ -72,7 +72,7 @@ def logp_duration(acts: torch.Tensor, maxT: int, maxU: int, num_durations: int, 
 # duration_acts, maxT, maxU, num_durations, b, t - durations[i], u, i
 
 @cuda.jit()
-def compute_alphas_kernel(
+def compute_alphas_kernel_dep(
     acts: torch.Tensor,
     denom: torch.Tensor,
     alphas: torch.Tensor,
@@ -174,7 +174,7 @@ def compute_alphas_kernel(
 
 
 @cuda.jit()
-def compute_betas_kernel(
+def compute_betas_kernel_dep(
     acts: torch.Tensor,
     denom: torch.Tensor,
     betas: torch.Tensor,
@@ -271,7 +271,7 @@ def compute_betas_kernel(
 
 
 @cuda.jit()
-def compute_grad_kernel(
+def compute_grad_kernel_dep(
     grads: torch.Tensor,
     acts: torch.Tensor,
     denom: torch.Tensor,
@@ -288,6 +288,7 @@ def compute_grad_kernel(
     blank_: int,
     fastemit_lambda: float,
     clamp: float,
+    num_durations: int,
 ):
     """
     Compute gradients over the transduction step.
@@ -394,7 +395,10 @@ def compute_grad_kernel(
                 grad -= math.exp(math.log1p(fastemit_lambda) + alphas[col] + logpk - logll[mb] + betas[col + 1])
 
             # update grads[b, t, u, v] = grad
-            grads[col * alphabet_size + idx] = grad
+            if idx == blank_:
+                grads[col * alphabet_size * num_durations + alphabet_size + idx] = grad
+            else:
+                grads[col * alphabet_size * num_durations + idx] = grad
 
             # clamp gradient (if needed)
             if clamp > 0.0:
@@ -887,7 +891,7 @@ def compute_multiblank_grad_kernel(
 
 
 @cuda.jit()
-def compute_tdt_alphas_kernel(
+def compute_tdt_alphas_kernel_dep(
     acts: torch.Tensor,
     duration_acts: torch.Tensor,
     denom: torch.Tensor,
@@ -1065,7 +1069,7 @@ def compute_tdt_alphas_kernel(
             )
             - sigma
         )
-
+        
         # then we add the scores for duration > 1, if such durations are possible given the audio lengths.
         for i in range(2, num_durations):
             if T >= durations[i]:
@@ -1082,12 +1086,12 @@ def compute_tdt_alphas_kernel(
                 loglike = rnnt_helper.log_sum_exp(loglike, big_blank_loglike)
             else:
                 break
-
+        
         llForward[b] = loglike
 
 
 @cuda.jit()
-def compute_tdt_betas_kernel(
+def compute_tdt_betas_kernel_dep(
     acts: torch.Tensor,
     duration_acts: torch.Tensor,
     denom: torch.Tensor,
@@ -1264,7 +1268,7 @@ def compute_tdt_betas_kernel(
 
 
 @cuda.jit()
-def compute_tdt_grad_kernel(
+def compute_tdt_grad_kernel_dep(
     label_grads: torch.Tensor,
     duration_grads: torch.Tensor,
     acts: torch.Tensor,
@@ -1341,7 +1345,6 @@ def compute_tdt_grad_kernel(
 
     # Buffered gradient calculations, broadcast across B=b, T=t and U=u, looped over V with some constant stride.
     # Look up gradient calculation from rnnt_numpy.compute_gradient()
-
     if t < T and u < U:
         # logpk_blank = (
         #     denom[col] + acts[col * alphabet_size + blank_] - sigma
@@ -1369,13 +1372,16 @@ def compute_tdt_grad_kernel(
         # 2) An inner while loop moves the index of each buffer element by the size of the buffer itself,
         #    such that all elements of the vocabulary size are covered in (V + 1 // thread_buffer) number of steps.
         # As such, each thread will perform the while loop at least (V + 1 // thread_buffer) number of times
-        while idx < alphabet_size:
+        while idx < alphabet_size * num_durations:
             # remember, `col` represents the tri-index [b, t, u]
             # therefore; logpk = denom[b, t, u] + acts[b, t, u, v]
-            logpk = denom[col] + acts[col * alphabet_size + idx]
+            # logpk = denom[col] + acts[col * alphabet_size + idx]
+            logpk = acts[col * alphabet_size * num_durations + idx]
             # initialize the grad of the sample acts[b, t, u, v]
-            grad = math.exp(alphas[col] + betas[col] + logpk - logll[mb])
+            # grad = math.exp(alphas[col] + betas[col] + logpk - logll[mb])
+            grad = 0.0
 
+            """""
             # If FastEmit regularization is enabled, calculate the gradeint of probability of predicting the next label
             # at the current timestep.
             # The formula for this is Equation 9 in https://arxiv.org/abs/2010.11148, multiplied by the log probability
@@ -1398,52 +1404,90 @@ def compute_tdt_grad_kernel(
             else:
                 fastemit_grad = 0.0
 
+
             # Update the gradient of act[b, t, u, v] with the gradient from FastEmit regularization
             grad = grad + fastemit_grad
+            """""
+            
+            # blank label
+            # duration[i] -> (durations[i] + 1) * alphabet_size - 1 or durations[i] * alphabet_size + blank_
+
 
             # grad to last blank transition
             # grad[b, T-1, U-1, v=blank] -= exp(alphas[b, t, u] + logpk - sigma - logll[b] + logp(duration) for all possible non-zero durations.
-            if idx == blank_ and u == U - 1:
-                for i in range(1, num_durations):
-                    if t == T - durations[i]:
+            # if idx == blank_ and u == U - 1:
+            #     for i in range(1, num_durations):
+            #         if t == T - durations[i]:
+            #             grad -= math.exp(
+            #                 alphas[col] + logpk - sigma - logll[mb] + duration_acts[col * num_durations + i]
+            #             )
+            
+            if (idx - blank_) % alphabet_size == 0 and u == U - 1:
+                    d = int((idx - blank_) / alphabet_size) # P(v, d | t, u) = P(blank, d | T - d, U - 1)
+                    if t == T - d and d > 0:
                         grad -= math.exp(
-                            alphas[col] + logpk - sigma - logll[mb] + duration_acts[col * num_durations + i]
+                            alphas[col] - sigma - logll[mb] # beta[T, U - 1] = log(1) = 0
                         )
+
+                
 
             # grad of blank across t < T;
             # grad[b, t<T-1, u, v=blank] -= exp(alphas[b, t, u] + logpk - sigma + logp_duration - logll[b] + betas[b, t + duration, u]) for all non-zero durations
-            if idx == blank_:
-                for i in range(1, num_durations):
-                    if t < T - durations[i]:
-                        grad -= math.exp(
-                            alphas[col]
-                            + logpk
-                            - sigma
-                            - logll[mb]
-                            + betas[col + maxU * durations[i]]
-                            + duration_acts[col * num_durations + i]
-                        )
+            # if idx == blank_:
+            #     for i in range(1, num_durations):
+            #         if t < T - durations[i]:
+            #             grad -= math.exp(
+            #                 alphas[col]
+            #                 + logpk
+            #                 - sigma
+            #                 - logll[mb]
+            #                 + betas[col + maxU * durations[i]]
+            #                 + duration_acts[col * num_durations + i]
+            #             )
 
-            # grad of correct token across u < U;
-            # grad[b, t, u<U-1, v=label[u]] -= exp(alphas[b, t, u] + logpk - sigma + logp_duration - logll[b] + betas[b, t + duration, u + 1]) for all blank durations.
-            # Scale the gradient by (1.0 + FastEmit_lambda) in log space, then exponentiate
-            if u < U - 1 and idx == labels[u]:
-                # exp(log(1 + fastemit_lambda) + ...) is numerically more stable than
-                # multiplying (1.0 + fastemit_lambda) with result.
-                for i in range(num_durations):
-                    if t + durations[i] < T:
-                        grad -= math.exp(
-                            math.log1p(fastemit_lambda)
-                            + alphas[col]
-                            + logpk
-                            - sigma
-                            - logll[mb]
-                            + betas[col + 1 + maxU * durations[i]]
-                            + duration_acts[col * num_durations + i]
-                        )
+            if (idx - blank_) % alphabet_size == 0:
+                d = int((idx - blank_) / alphabet_size)
+                if t < T - d and d > 0:
+                    grad -= math.exp(
+                        alphas[col]
+                        - sigma
+                        - logll[mb]
+                        + betas[col + maxU * d]
+                    )
+            
+
+
+            # # grad of correct token across u < U;
+            # # grad[b, t, u<U-1, v=label[u]] -= exp(alphas[b, t, u] + logpk - sigma + logp_duration - logll[b] + betas[b, t + duration, u + 1]) for all blank durations.
+            # # Scale the gradient by (1.0 + FastEmit_lambda) in log space, then exponentiate
+            # if u < U - 1 and idx == labels[u]:
+            #     # exp(log(1 + fastemit_lambda) + ...) is numerically more stable than
+            #     # multiplying (1.0 + fastemit_lambda) with result.
+            #     for i in range(num_durations):
+            #         if t + durations[i] < T:
+            #             grad -= math.exp(
+            #                 math.log1p(fastemit_lambda)
+            #                 + alphas[col]
+            #                 + logpk
+            #                 - sigma
+            #                 - logll[mb]
+            #                 + betas[col + 1 + maxU * durations[i]]
+            #                 + duration_acts[col * num_durations + i]
+            #             )
+            
+            if u < U - 1 and (idx - labels[u]) % alphabet_size == 0:
+                d = int((idx - labels[u]) / alphabet_size)
+                if t + d < T:
+                    grad -= math.exp(
+                        + alphas[col]
+                        - sigma
+                        - logll[mb]
+                        + betas[col + 1 + maxU * d]
+                    )
 
             # update grads[b, t, u, v] = grad
-            label_grads[col * alphabet_size + idx] = grad
+            label_grads[col * alphabet_size * num_durations + idx] = grad
+            
 
             # clamp gradient (if needed)
             if clamp > 0.0:

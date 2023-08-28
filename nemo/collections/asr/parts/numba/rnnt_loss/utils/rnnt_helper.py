@@ -116,6 +116,7 @@ def compute_costs_data(source: torch.Tensor, dest: torch.Tensor, fastemit_lambda
         dest[idx] *= numba.float32(1.0 + fastemit_lambda)
 
 
+
 def get_workspace_size(
     maxT: int, maxU: int, minibatch: int, gpu: bool
 ) -> Tuple[Optional[int], global_constants.RNNTStatus]:

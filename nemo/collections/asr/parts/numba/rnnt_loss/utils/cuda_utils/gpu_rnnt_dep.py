@@ -160,7 +160,7 @@ class GPURNNT:
         self.log_softmax(acts, denom)
 
         # Compute alphas
-        gpu_rnnt_kernel_dep.compute_alphas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
+        gpu_rnnt_kernel_dep.compute_alphas_kernel_dep[self.minibatch_, self.maxU_, self.stream_, 0](
             acts,
             denom,
             alphas,
@@ -177,7 +177,7 @@ class GPURNNT:
 
         if training:
             # Compute betas
-            gpu_rnnt_kernel_dep.compute_betas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
+            gpu_rnnt_kernel_dep.compute_betas_kernel_dep[self.minibatch_, self.maxU_, self.stream_, 0](
                 acts,
                 denom,
                 betas,
@@ -195,7 +195,7 @@ class GPURNNT:
             # Compute gradient
             grad_blocks_per_grid = self.minibatch_ * self.maxT_ * self.maxU_
             grad_threads_per_block = gpu_rnnt_kernel_dep.GPU_RNNT_THREAD_SIZE
-            gpu_rnnt_kernel_dep.compute_grad_kernel[grad_blocks_per_grid, grad_threads_per_block, self.stream_, 0](
+            gpu_rnnt_kernel_dep.compute_grad_kernel_dep[grad_blocks_per_grid, grad_threads_per_block, self.stream_, 0](
                 grads,
                 acts,
                 denom,
@@ -594,16 +594,26 @@ class GPUTDT_dep(GPURNNT):
         training = label_grads is not None
         if training:
             label_grads *= 0.0  # zero grads
-            # duration_grads *= 0.0  # zero grads
+            duration_grads *= 0.0  # zero grads
 
         _, (denom, alphas, betas, llForward, llBackward, durations) = self._prepare_workspace()
 
         ######## START EXECUTION ########
         # self.log_softmax(label_acts, denom)
         r = random.uniform(0, 1)
-        if r < 0:
+
+        # if r < self.omega:
+        #     label_acts = torch.cat((label_acts[:,:,:,:self.blank_], label_acts[:,:,:,self.alphabet_size_ + self.blank_].unsqueeze(-1)), dim=-1).contiguous().cuda()
+        #     label_acts, label_acts_shape = rnnt_helper.flatten_tensor(label_acts)
+        #     self.log_softmax(label_acts, denom)
+        # else:
+        #     label_acts = torch.nn.functional.log_softmax(label_acts, dim=-1).contiguous()
+        #     label_acts, label_acts_shape = rnnt_helper.flatten_tensor(label_acts)
+
+
+        if r < self.omega:
             # Compute alphas
-            gpu_rnnt_kernel_dep.compute_alphas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
+            gpu_rnnt_kernel_dep.compute_alphas_kernel_dep[self.minibatch_, self.maxU_, self.stream_, 0](
                 label_acts,
                 denom,
                 alphas,
@@ -619,7 +629,7 @@ class GPUTDT_dep(GPURNNT):
             )
         else:
             # Compute alphas
-            gpu_rnnt_kernel_dep.compute_tdt_alphas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
+            gpu_rnnt_kernel_dep.compute_tdt_alphas_kernel_dep[self.minibatch_, self.maxU_, self.stream_, 0](
                 label_acts, 
                 duration_acts,
                 denom,
@@ -641,7 +651,7 @@ class GPUTDT_dep(GPURNNT):
         if training:
             # Compute betas
             if r < self.omega:
-                gpu_rnnt_kernel_dep.compute_betas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
+                gpu_rnnt_kernel_dep.compute_betas_kernel_dep[self.minibatch_, self.maxU_, self.stream_, 0](
                     label_acts,
                     denom,
                     betas,
@@ -659,7 +669,7 @@ class GPUTDT_dep(GPURNNT):
                 # Compute gradient
                 grad_blocks_per_grid = self.minibatch_ * self.maxT_ * self.maxU_
                 grad_threads_per_block = gpu_rnnt_kernel_dep.GPU_RNNT_THREAD_SIZE
-                gpu_rnnt_kernel_dep.compute_grad_kernel[grad_blocks_per_grid, grad_threads_per_block, self.stream_, 0](
+                gpu_rnnt_kernel_dep.compute_grad_kernel_dep[grad_blocks_per_grid, grad_threads_per_block, self.stream_, 0](
                     label_grads,
                     label_acts,
                     denom,
@@ -676,9 +686,10 @@ class GPUTDT_dep(GPURNNT):
                     self.blank_,
                     self.fastemit_lambda_,
                     self.clamp_,
+                    self.num_durations
                 )
             else:
-                gpu_rnnt_kernel_dep.compute_tdt_betas_kernel[self.minibatch_, self.maxU_, self.stream_, 0](
+                gpu_rnnt_kernel_dep.compute_tdt_betas_kernel_dep[self.minibatch_, self.maxU_, self.stream_, 0](
                     label_acts,
                     duration_acts,
                     denom,
@@ -696,13 +707,11 @@ class GPUTDT_dep(GPURNNT):
                     durations,
                     self.num_durations,
                 )
-                print('!!!!!!!!!!')
-                exit()
 
                 # Compute gradient
                 grad_blocks_per_grid = self.minibatch_ * self.maxT_ * self.maxU_
                 grad_threads_per_block = gpu_rnnt_kernel_dep.GPU_RNNT_THREAD_SIZE
-                gpu_rnnt_kernel_dep.compute_tdt_grad_kernel[grad_blocks_per_grid, grad_threads_per_block, self.stream_, 0](
+                gpu_rnnt_kernel_dep.compute_tdt_grad_kernel_dep[grad_blocks_per_grid, grad_threads_per_block, self.stream_, 0](
                     label_grads,
                     duration_grads,
                     label_acts,
@@ -718,10 +727,10 @@ class GPUTDT_dep(GPURNNT):
                     self.minibatch_,
                     self.maxT_,
                     self.maxU_,
-                    self.alphabet_size_,
-                    self.blank_,
-                    durations,
-                    self.num_durations,
+                    self.alphabet_size_, # 129
+                    self.blank_, # 128
+                    durations, 
+                    self.num_durations, # 5
                     self.fastemit_lambda_,
                     self.clamp_,
                 )
@@ -734,8 +743,11 @@ class GPUTDT_dep(GPURNNT):
         # Then negate to compute the loglikelihood.
         threadsperblock = min(costs.shape[0], 32)
         blockspergrid = (costs.shape[0] + (threadsperblock - 1)) // threadsperblock
+        # rnnt_helper.compute_costs_data[blockspergrid, threadsperblock, self.stream_, 0](
+        #     llForward, costs, self.fastemit_lambda_
+        # )
         rnnt_helper.compute_costs_data[blockspergrid, threadsperblock, self.stream_, 0](
-            llForward, costs, self.fastemit_lambda_
+            llForward, costs, 0.0
         )
         self.stream_.synchronize()
 
