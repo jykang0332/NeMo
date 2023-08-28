@@ -2332,7 +2332,6 @@ class GreedyTDTInfer(_GreedyRNNTInfer):
         preserve_alignments: bool = False,
         preserve_frame_confidence: bool = False,
         confidence_measure_cfg: Optional[DictConfig] = None,
-        dependence = None
     ):
         super().__init__(
             decoder_model=decoder_model,
@@ -2344,9 +2343,6 @@ class GreedyTDTInfer(_GreedyRNNTInfer):
             confidence_measure_cfg=confidence_measure_cfg,
         )
         self.durations = durations
-
-        # jykang
-        self.dependence = dependence
 
     @typecheck()
     def forward(
@@ -2383,7 +2379,7 @@ class GreedyTDTInfer(_GreedyRNNTInfer):
                     logitlen = encoded_lengths[batch_idx]
 
                     partial_hypothesis = partial_hypotheses[batch_idx] if partial_hypotheses is not None else None
-                    hypothesis = self._greedy_decode(inseq, logitlen, partial_hypotheses=partial_hypothesis, dependence=self.dependence)
+                    hypothesis = self._greedy_decode(inseq, logitlen, partial_hypotheses=partial_hypothesis)
                     hypotheses.append(hypothesis)
 
             # Pack results into Hypotheses
@@ -2396,7 +2392,7 @@ class GreedyTDTInfer(_GreedyRNNTInfer):
 
     @torch.no_grad()
     def _greedy_decode(
-        self, x: torch.Tensor, out_len: torch.Tensor, partial_hypotheses: Optional[rnnt_utils.Hypothesis] = None, dependence = None
+        self, x: torch.Tensor, out_len: torch.Tensor, partial_hypotheses: Optional[rnnt_utils.Hypothesis] = None
     ):
         # x: [T, 1, D]
         # out_len: [seq_len]
@@ -2441,86 +2437,40 @@ class GreedyTDTInfer(_GreedyRNNTInfer):
                     last_label = self._SOS
                 else:
                     last_label = label_collate([[hypothesis.last_token]])
-                
+
                 # Perform prediction network and joint network steps.
                 g, hidden_prime = self._pred_step(last_label, hypothesis.dec_state)
                 # If preserving per-frame confidence, log_normalize must be true
                 logits = self._joint_step(f, g, log_normalize=False)
+                logp = logits[0, 0, 0, : -len(self.durations)]
+                if self.preserve_frame_confidence:
+                    logp = torch.log_softmax(logp, -1)
 
-                if dependence != None and dependence:
-                    # logp = logits[0, 0, 0, : -len(self.durations)]
-                    # if self.preserve_frame_confidence:
-                        # logp = torch.log_softmax(logp, -1)
+                duration_logp = torch.log_softmax(logits[0, 0, 0, -len(self.durations) :], dim=-1)
+                del g
 
-                    # duration_logp = torch.log_softmax(logits[0, 0, 0, -len(self.durations) :], dim=-1)
-                    del g
+                # torch.max(0) op doesnt exist for FP 16.
+                if logp.dtype != torch.float32:
+                    logp = logp.float()
 
-                    # # torch.max(0) op doesnt exist for FP 16.
-                    # if logp.dtype != torch.float32:
-                    #     logp = logp.float()
+                # get index k, of max prob
+                v, k = logp.max(0)
+                k = k.item()  # K is the label at timestep t_s in inner loop, s >= 0.
 
-                    logits = logits[0, 0, 0, :]
-                    logits = torch.log_softmax(logits, dim=-1)
+                d_v, d_k = duration_logp.max(0)
+                d_k = d_k.item()
 
-                    # if logits.dtype != torch.float32:
-                    #     logits = logits.float()
+                skip = self.durations[d_k]
 
-                    # # get index k, of max prob
-                    # v, k = logp.max(0)
-                    # k = k.item()  # K is the label at timestep t_s in inner loop, s >= 0.
+                if self.preserve_alignments:
+                    # insert logprobs into last timestep
+                    hypothesis.alignments[-1].append((logp.to('cpu'), torch.tensor(k, dtype=torch.int32)))
 
-                    # d_v, d_k = duration_logp.max(0)
-                    # d_k = d_k.item()
+                if self.preserve_frame_confidence:
+                    # insert confidence into last timestep
+                    hypothesis.frame_confidence[-1].append(self._get_confidence(logp))
 
-                    vocab_size = int(logits.size(-1) / len(self.durations))
-                    v, max_index = logits.max(0)
-                    max_index = max_index.item()
-                    k = max_index % vocab_size
-                    d_k = max_index // vocab_size
-
-                    skip = self.durations[d_k]
-
-                    # if self.preserve_alignments:
-                    #     # insert logprobs into last timestep
-                    #     hypothesis.alignments[-1].append((logp.to('cpu'), torch.tensor(k, dtype=torch.int32)))
-
-                    # if self.preserve_frame_confidence:
-                    #     # insert confidence into last timestep
-                    #     hypothesis.frame_confidence[-1].append(self._get_confidence(logp))
-
-                    # del logp
-                    del logits
-
-                else:
-                    logp = logits[0, 0, 0, : -len(self.durations)]
-                    if self.preserve_frame_confidence:
-                        logp = torch.log_softmax(logp, -1)
-
-                    duration_logp = torch.log_softmax(logits[0, 0, 0, -len(self.durations) :], dim=-1)
-                    del g
-
-                    # torch.max(0) op doesnt exist for FP 16.
-                    if logp.dtype != torch.float32:
-                        logp = logp.float()
-
-                    # get index k, of max prob
-                    v, k = logp.max(0)
-                    k = k.item()  # K is the label at timestep t_s in inner loop, s >= 0.
-
-                    d_v, d_k = duration_logp.max(0)
-                    d_k = d_k.item()
-
-                    skip = self.durations[d_k]
-
-                    if self.preserve_alignments:
-                        # insert logprobs into last timestep
-                        hypothesis.alignments[-1].append((logp.to('cpu'), torch.tensor(k, dtype=torch.int32)))
-
-                    if self.preserve_frame_confidence:
-                        # insert confidence into last timestep
-                        hypothesis.frame_confidence[-1].append(self._get_confidence(logp))
-
-                    del logp
+                del logp
 
                 # If blank token is predicted, exit inner loop, move onto next timestep t
                 if k == self._blank_index:

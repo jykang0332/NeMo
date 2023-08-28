@@ -213,6 +213,9 @@ class AbstractRNNTDecoding(ConfidenceMixin):
         self.compute_timestamps = self.cfg.get('compute_timestamps', None)
         self.word_seperator = self.cfg.get('word_seperator', ' ')
 
+        # jykang
+        self.dependence = self.cfg.get('dependence', None)
+
         if self.durations is not None:  # this means it's a TDT model.
             if blank_id == 0:
                 raise ValueError("blank_id must equal len(non_blank_vocabs) for TDT models")
@@ -292,6 +295,7 @@ class AbstractRNNTDecoding(ConfidenceMixin):
                         preserve_alignments=self.preserve_alignments,
                         preserve_frame_confidence=self.preserve_frame_confidence,
                         confidence_measure_cfg=self.confidence_measure_cfg,
+                        dependence=self.dependence,
                     )
             else:
                 self.decoding = greedy_decode.GreedyMultiblankRNNTInfer(
