@@ -23,7 +23,9 @@
 # However accumulate_grad_batches is better to be avoided as long as the global batch size is large enough and training is stable.
 
 
-name: "Conformer-TDT-BPE-Stateless"
+name: "Conformer-TDT-BPE-Stateless-DEP"
+
+# init_from_nemo_model: '/home/jykang/NeMo/nemo_experiments/2023-08-10_14-04-33.nemo'
 
 model:
   sample_rate: 16000
@@ -44,7 +46,7 @@ model:
   train_ds:
     manifest_filepath: "/home/jykang/NeMo/data/train_clean_100.json,/home/jykang/NeMo/data/train_clean_360.json,/home/jykang/NeMo/data/train_other_500.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 8 # you may increase batch_size if your memory allows
+    batch_size: 4 # you may increase batch_size if your memory allows
     shuffle: false
     num_workers: 8
     pin_memory: true
@@ -63,7 +65,7 @@ model:
   validation_ds:
     manifest_filepath: "/home/jykang/NeMo/data/dev_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 8
+    batch_size: 4
     shuffle: false
     num_workers: 8
     pin_memory: true
@@ -72,7 +74,7 @@ model:
   test_ds:
     manifest_filepath: null
     sample_rate: ${model.sample_rate}
-    batch_size: 8
+    batch_size: 4
     shuffle: false
     num_workers: 8
     pin_memory: true
@@ -166,12 +168,13 @@ model:
     # However, to preserve memory, this ratio can be 1:8 or even 1:16.
     # Extreme case of 1:B (i.e. fused_batch_size=1) should be avoided as training speed would be very slow.
     fuse_loss_wer: true
-    fused_batch_size: 8
+    fused_batch_size: 4
 
     jointnet:
       joint_hidden: ${model.model_defaults.joint_hidden}
       activation: "relu"
       dropout: 0.2
+      dependence: True
 
     # this variable is non-zero for this TDT model, as well as multi-blank models. It represents the number of
     # additional outputs from the joiner, besides all tokens in the BPE vocab plus the (standard) blank symbol.
@@ -198,6 +201,8 @@ model:
       score_norm: true
       tsd_max_sym_exp: 50  # for Time Synchronous Decoding
       alsd_max_target_len: 2.0  # for Alignment-Length Synchronous Decoding
+    
+    dependence: True
 
   loss:
     # This is the main different between a TDT model and a conventional RNNT model -- the loss function.
@@ -206,13 +211,13 @@ model:
     tdt_kwargs:
       # FastEmit regularization: https://arxiv.org/abs/2010.11148
       # You may enable FastEmit to reduce the latency of the model for streaming
-      fastemit_lambda: 0 #0.001  # Recommended values to be in range [1e-4, 1e-2], 0.001 is a good start.
+      fastemit_lambda: 0.0 # 0.001  # Recommended values to be in range [1e-4, 1e-2], 0.001 is a good start.
       clamp: -1.0  # if > 0, applies gradient clamping in range [-clamp, clamp] for the joint tensor only.
 
       # refer to https://arxiv.org/abs/2304.06795 for the meaning of the following three configs.
       durations: ${model.model_defaults.tdt_durations}
       sigma: 0.05 # hyper-param for under-normalization.
-      omega: 0 # 0.1 # weight for regular RNN-T loss.
+      omega: 0 # weight for regular RNN-T loss.
 
   # Adds Gaussian noise to the gradients of the decoder to avoid overfitting
   variational_noise:
@@ -248,7 +253,7 @@ trainer:
   precision: 32 # Should be set to 16 for O1 and O2 to enable the AMP.
   log_every_n_steps: 10  # Interval of logging.
   enable_progress_bar: True
-  resume_from_checkpoint: null # The path to a checkpoint file to continue the training, restores the whole state including the epoch, step, LR schedulers, apex, etc.
+  resume_from_checkpoint: null # '/home/jykang/NeMo/nemo_experiments/Conformer-TDT-BPE-Stateless-DEP/test3/2023-08-10_14-04-33--val_wer=0.0383-epoch=150-last_test2.ckpt' # The path to a checkpoint file to continue the training, restores the whole state including the epoch, step, LR schedulers, apex, etc.
   num_sanity_val_steps: 0 # number of steps to perform validation steps for sanity check the validation process before starting the training, setting to 0 disables it
   check_val_every_n_epoch: 1 # number of evaluations on validation every n epochs
   sync_batchnorm: true

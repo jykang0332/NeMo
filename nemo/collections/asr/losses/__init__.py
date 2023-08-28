@@ -21,5 +21,5 @@ from nemo.collections.asr.losses.ssl_losses.ctc import CTCLossForSSL
 from nemo.collections.asr.losses.ssl_losses.mlm import MLMLoss
 from nemo.collections.asr.losses.ssl_losses.rnnt import RNNTLossForSSL
 
-from nemo.collections.asr.losses.rnnt_dep import RNNTLoss_dep, resolve_rnnt_default_loss_name
-from nemo.collections.asr.parts.numba.rnnt_loss import TDTLossNumba_dep
+# from nemo.collections.asr.losses.rnnt_dep import RNNTLoss_dep, resolve_rnnt_default_loss_name
+# from nemo.collections.asr.parts.numba.rnnt_loss.rnnt_pytorch_dep import TDTLossNumba_dep, MultiblankRNNTLossNumba_dep, RNNTLossNumba_dep
