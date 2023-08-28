@@ -212,6 +212,7 @@ class SaveRestoreConnector:
         strict: bool = True,
         return_config: bool = False,
         trainer: Trainer = None,
+        stu_cfg = None,
     ):
         """
         Restores model instance (weights and configuration) into .nemo file
@@ -246,6 +247,45 @@ class SaveRestoreConnector:
         conf, instance, state_dict = loaded_params
         state_dict = self.modify_state_dict(conf, state_dict)
         self.load_instance_with_state_dict(instance, state_dict, strict)
+
+        # jykang
+        if stu_cfg.model.joint.jointnet.get('dependence', False):
+            num_durations = stu_cfg.model.model_defaults.num_tdt_durations
+            label_state = state_dict['joint.joint_net.2.weight'][:-num_durations, :]
+            label_bais_state = state_dict['joint.joint_net.2.bias'][:-num_durations]
+
+            duration_state = state_dict['joint.joint_net.2.weight'][-num_durations:, :]
+            duration_bais_state = state_dict['joint.joint_net.2.bias'][-num_durations:]
+
+            duration_state = duration_state.repeat_interleave(label_state.shape[0], dim=0)
+            duration_bais_state = duration_bais_state.repeat_interleave(label_state.shape[0])
+
+            label_state = label_state.repeat(num_durations, 1)
+            label_bais_state = label_bais_state.repeat(num_durations)
+
+            new_state = label_state + duration_state
+            new_bais_state = label_bais_state + duration_bais_state
+
+            del label_state
+            del duration_state
+            del label_bais_state
+            del duration_bais_state
+            
+            new_state_dict = {}
+            for key in state_dict.keys():
+                if key == 'joint.joint_net.2.weight':
+                    new_state_dict[key] = new_state
+                elif key == 'joint.joint_net.2.bias':
+                    new_state_dict[key] = new_bais_state
+                else:
+                    new_state_dict[key] = state_dict[key]
+            
+            del new_state
+            del new_bais_state
+
+            return new_state_dict
+        
+
         logging.info(f'Model {instance.__class__.__name__} was successfully restored from {restore_path}.')
         return instance
 

@@ -390,6 +390,7 @@ class ModelPT(LightningModule, Model):
         return_config: bool = False,
         save_restore_connector: SaveRestoreConnector = None,
         trainer: Optional[Trainer] = None,
+        stu_cfg = None, # jykang
     ):
         """
         Restores model instance (weights and configuration) from .nemo file.
@@ -432,8 +433,13 @@ class ModelPT(LightningModule, Model):
         app_state.model_restore_path = restore_path
 
         cls.update_save_restore_connector(save_restore_connector)
+        # instance = cls._save_restore_connector.restore_from(
+        #     cls, restore_path, override_config_path, map_location, strict, return_config, trainer
+        # )
+
+        # jykang
         instance = cls._save_restore_connector.restore_from(
-            cls, restore_path, override_config_path, map_location, strict, return_config, trainer
+            cls, restore_path, override_config_path, map_location, strict, return_config, trainer, stu_cfg
         )
         if isinstance(instance, ModelPT):
             instance._save_restore_connector = save_restore_connector
@@ -1213,10 +1219,16 @@ class ModelPT(LightningModule, Model):
                     model_path = cfg.init_from_nemo_model
                     # Restore model
                     restored_model = self.restore_from(
-                        model_path, map_location=map_location, strict=cfg.get("init_strict", True)
+                        model_path, map_location=map_location, strict=cfg.get("init_strict", True), stu_cfg=cfg,
                     )
+                    # jykang
                     # Restore checkpoint into current model
-                    self.load_state_dict(restored_model.state_dict(), strict=False)
+                    if cfg.model.joint.jointnet.get('dependence', False):
+                        self.load_state_dict(restored_model, strict=False)                   
+                    else:
+                        self.load_state_dict(restored_model.state_dict(), strict=False)
+
+
                     logging.info(f'Model checkpoint restored from nemo file with path : `{model_path}`')
                     del restored_model
                 elif isinstance(cfg.init_from_nemo_model, (DictConfig, dict)):
