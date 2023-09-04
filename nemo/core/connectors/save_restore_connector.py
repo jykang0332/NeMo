@@ -249,7 +249,7 @@ class SaveRestoreConnector:
         self.load_instance_with_state_dict(instance, state_dict, strict)
 
         # jykang
-        if stu_cfg.model.joint.jointnet.get('dependence', False):
+        if stu_cfg != None and stu_cfg.model.joint.jointnet.get('dependence', False):
             num_durations = stu_cfg.model.model_defaults.num_tdt_durations
             label_state = state_dict['joint.joint_net.2.weight'][:-num_durations, :]
             label_bais_state = state_dict['joint.joint_net.2.bias'][:-num_durations]
