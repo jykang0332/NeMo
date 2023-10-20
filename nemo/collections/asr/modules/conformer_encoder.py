@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import time
 import math
 import random
 from collections import OrderedDict
@@ -285,6 +285,9 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
         global_tokens: int = 0,
         global_tokens_spacing: int = 1,
         global_attn_separate: bool = False,
+        # ToMe
+        tome=False,
+        r=0,
     ):
         super().__init__()
         d_ff = d_model * ff_expansion_factor
@@ -299,6 +302,12 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
         self.global_tokens = global_tokens
         self.global_attn_separate = global_attn_separate
         self.global_tokens_spacing = global_tokens_spacing
+
+        # ToMe
+        # self.tome = tome
+        # self.r = r
+        self.tome = False
+        self.r = 8
 
         # Setting up the att_context_size
         (
@@ -417,6 +426,10 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
                 pos_bias_u=pos_bias_u,
                 pos_bias_v=pos_bias_v,
                 att_context_size=self.att_context_size,
+                # ToMe
+                tome=self.tome,
+                r=self.r,
+                lth_layer=i,
             )
             self.layers.append(layer)
 
@@ -559,7 +572,8 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
             # Convert caches from the tensor to list
             cache_last_time_next = []
             cache_last_channel_next = []
-
+        
+        start = time.time() 
         for lth, (drop_prob, layer) in enumerate(zip(self.layer_drop_probs, self.layers)):
             original_signal = audio_signal
             if cache_last_channel is not None:
@@ -575,6 +589,8 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
                 pad_mask=pad_mask,
                 cache_last_channel=cache_last_channel_cur,
                 cache_last_time=cache_last_time_cur,
+                # ToMe
+                encoded_length=padding_length,
             )
 
             if cache_last_channel_cur is not None:
@@ -621,7 +637,10 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
                     self.register_accessible_tensor(
                         name=f'interctc/layer_output_{lth}', tensor=torch.transpose(lth_audio_signal, 1, 2)
                     )
+              
                     self.register_accessible_tensor(name=f'interctc/layer_length_{lth}', tensor=length)
+        end = time.time()
+        print(f"Layers took {end - start} seconds")
 
         if self.out_proj is not None:
             audio_signal = self.out_proj(audio_signal)

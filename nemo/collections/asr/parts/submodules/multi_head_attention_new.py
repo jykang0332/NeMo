@@ -1133,44 +1133,24 @@ def bipartite_soft_matching(
         if distill_token:
             return torch.cat([unm[:, :1], dst[:, :1], unm[:, 1:], dst[:, 1:]], dim=1)
         else:
-            # return torch.cat([unm, dst], dim=1)
-            out = torch.zeros(n, metric.shape[1], c, device=x.device, dtype=x.dtype)
-            out[..., 1::2, :] = dst
-            out.scatter_(dim=-2, index=(2 * unm_idx).expand(n, unm.shape[1], c), src=unm)
+            return torch.cat([unm, dst], dim=1)
+             
 
-            # Mask
-            delete_mask = torch.ones_like(out, dtype=torch.bool)
-            for i in range(n):
-                delete_mask[i, 2 * src_idx[i, :, 0], :] = False
-            out = out[delete_mask].reshape(n, -1, c)
-
-            return out
 
     def unmerge(x: torch.Tensor) -> torch.Tensor:
-        # unm_len = unm_idx.shape[1] # a.shape[1] - r
-        # unm, dst = x[..., :unm_len, :], x[..., unm_len:, :]
-        # n, _, c = unm.shape
+        unm_len = unm_idx.shape[1] # a.shape[1] - r
+        unm, dst = x[..., :unm_len, :], x[..., unm_len:, :]
+        n, _, c = unm.shape
 
-        # src = dst.gather(dim=-2, index=dst_idx.expand(n, r, c))
+        src = dst.gather(dim=-2, index=dst_idx.expand(n, r, c))
 
-        # out = torch.zeros(n, metric.shape[1], c, device=x.device, dtype=x.dtype)
+        out = torch.zeros(n, metric.shape[1], c, device=x.device, dtype=x.dtype)
 
-        # out[..., 1::2, :] = dst
-        # out.scatter_(dim=-2, index=(2 * unm_idx).expand(n, unm_len, c), src=unm)
-        # out.scatter_(dim=-2, index=(2 * src_idx).expand(n, r, c), src=src)
-        n, _, c = x.shape
-        r = src_idx.shape[1]
-        b = []
-        for j in range(n):
-            a = x[j]
-            for i in range(r):
-                a = torch.cat((a[: 2 * src_idx[j, i, 0], :], torch.zeros(1, x.shape[2]).to(x.device), a[2 * src_idx[j, i, 0]:, :]), dim=0)
-            b.append(a.unsqueeze(0))
-        b = torch.cat(b, dim=0)
+        out[..., 1::2, :] = dst
+        out.scatter_(dim=-2, index=(2 * unm_idx).expand(n, unm_len, c), src=unm)
+        out.scatter_(dim=-2, index=(2 * src_idx).expand(n, r, c), src=src)
+        return out
 
-        src = b.gather(dim=-2, index=(2 * dst_idx + 1).expand(n, r, c))
-        b.scatter_(dim=-2, index=(2 * src_idx).expand(n, r, c), src=src)
-        return b
 
     return merge, unmerge
 

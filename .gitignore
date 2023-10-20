@@ -1,6 +1,7 @@
-data
-nemo_experiments
-nemo_experiments_ctc
+data/
+nemo_experiments/
+nemo_experiments_ctc/
+nemo_experiments_tdt/
 # log and data files
 *.model
 *.pkl
