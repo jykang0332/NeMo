@@ -113,7 +113,7 @@ class TranscriptionConfig:
     model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments/stt_en_conformer_ctc_large_ls.nemo"  # Path to a .nemo file
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = "/home/jykang/NeMo/data/dev_other.json"  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/home/jykang/NeMo/data/train_clean_100.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[
         Union[int, str]
     ] = None  # Used to select a single channel from multichannel audio, or use average across channels
@@ -121,7 +121,7 @@ class TranscriptionConfig:
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
 
     # General configs
-    output_filename: Optional[str] = "/home/jykang/NeMo/data/transcriptions/dev_other_stt_en_conformer_ctc_large_ls.json"
+    output_filename: Optional[str] = "/home/jykang/NeMo/data/transcriptions/train_clean_100_stt_en_conformer_ctc_large_ls.json"
     batch_size: int = 1
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.
@@ -172,7 +172,7 @@ class TranscriptionConfig:
     return_transcriptions: bool = False
 
     # For te_softmax extraction
-    softmax_path : Optional[str] = "/home/jykang/NeMo/data/softmax/dev-other"
+    softmax_path : Optional[str] = "/home/jykang/NeMo/data/softmax/train-clean-100"
 
 
 @hydra_runner(config_name="TranscriptionConfig", schema=TranscriptionConfig)
