@@ -101,10 +101,13 @@ class ModelChangeConfig:
 @dataclass
 class TranscriptionConfig:
     # Required configs
-    model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-960/checkpoints/Conformer-CTC-BPE-960.nemo"
-    #"/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE/2023-03-20_14-32-50/checkpoints/Conformer-CTC-BPE/2023-03-20_14-32-50.nemo"
+    model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments_ctc/Conformer-CTC-BPE-Mask/2023-04-26_19-36-22/checkpoints/Conformer-CTC-BPE-Mask.nemo"
+    # model_path: Optional[str] = '/home/jykang/NeMo/nemo_experiments_ctc/Conformer-CTC-BPE-SKD-softmax/2023-06-01_14-53-55/checkpoints/Conformer-CTC-BPE-SKD-softmax.nemo'
+    # model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments_ctc/Conformer-CTC-BPE-Mask_Attn_initialized/2023-06-08_10-42-02/checkpoints/Conformer-CTC-BPE-Mask_Attn_initialized.nemo"
+    # model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments_ctc/Conformer-CTC-BPE-960/checkpoints/Conformer-CTC-BPE-960.nemo"
+    # "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE/2023-03-20_14-32-50/checkpoints/Conformer-CTC-BPE/2023-03-20_14-32-50.nemo"
     # Path to a .nemo file
-    pretrained_name: Optional[str] = None  # Name of a pretrained model
+    pretrained_name: Optional[str] = "Conformer-CTC-BPE"  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
     dataset_manifest: Optional[str] = "/home/jykang/NeMo/data/test_clean.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[int] = None  # Used to select a single channel from multi-channel files
@@ -112,7 +115,7 @@ class TranscriptionConfig:
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
 
     # General configs
-    output_filename: Optional[str] = "/home/jykang/NeMo/data/results/test_clean_conformerctc_base.json"
+    output_filename: Optional[str] = "/home/jykang/NeMo/data/other_test/test_other_conformerctc_selfattn.json"
     batch_size: int = 32
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.

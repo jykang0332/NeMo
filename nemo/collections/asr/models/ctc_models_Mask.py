@@ -208,8 +208,6 @@ class EncDecCTCModel_Mask(ASRModel, ExportableEncDecModel, ASRModuleMixin, Inter
                     logits, logits_len, greedy_predictions = self.forward(
                         input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
                     )
-
-
                     if logprobs:
                         # dump log probs per file
                         for idx in range(logits.shape[0]):

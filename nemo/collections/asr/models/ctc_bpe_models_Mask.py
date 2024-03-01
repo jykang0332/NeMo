@@ -30,7 +30,7 @@ from nemo.utils import logging, model_utils
 
 # jykang
 from nemo.collections.asr.models.ctc_models_Mask import EncDecCTCModel_Mask
-from nemo.collections.asr.data import audio_to_text_dataset_KD 
+# from nemo.collections.asr.data import audio_to_text_dataset_KD 
 
 __all__ = ['EncDecCTCModelBPE_Mask']
 
@@ -94,6 +94,42 @@ class EncDecCTCModelBPE_Mask(EncDecCTCModel_Mask, ASRBPEMixin):
 
     def _setup_dataloader_from_config_KD(self, config: Optional[Dict]):
         dataset = audio_to_text_dataset_KD.get_audio_to_text_bpe_dataset_from_config_KD(
+            config=config,
+            local_rank=self.local_rank,
+            global_rank=self.global_rank,
+            world_size=self.world_size,
+            tokenizer=self.tokenizer,
+            preprocessor_cfg=self.cfg.get("preprocessor", None),
+        )
+
+        if dataset is None:
+            return None
+
+        if isinstance(dataset, AudioToBPEDALIDataset):
+            # DALI Dataset implements dataloader interface
+            return dataset
+
+        shuffle = config['shuffle']
+        if config.get('is_tarred', False):
+            shuffle = False
+
+        if hasattr(dataset, 'collate_fn'):
+            collate_fn = dataset.collate_fn
+        else:
+            collate_fn = dataset.datasets[0].collate_fn
+
+        return torch.utils.data.DataLoader(
+            dataset=dataset,
+            batch_size=config['batch_size'],
+            collate_fn=collate_fn,
+            drop_last=config.get('drop_last', False),
+            shuffle=shuffle,
+            num_workers=config.get('num_workers', 0),
+            pin_memory=config.get('pin_memory', False),
+        )
+    
+    def _setup_dataloader_from_config(self, config: Optional[Dict]):
+        dataset = audio_to_text_dataset.get_audio_to_text_bpe_dataset_from_config(
             config=config,
             local_rank=self.local_rank,
             global_rank=self.global_rank,
