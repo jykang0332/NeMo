@@ -122,7 +122,7 @@ class TranscriptionConfig:
 
     # General configs
     output_filename: Optional[str] = "/home/jykang/NeMo/data/transcriptions/check.json"
-    batch_size: int = 1
+    batch_size: int = 32
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.
     pred_name_postfix: Optional[str] = None  # If you need to use another model name, rather than standard one.
@@ -171,8 +171,8 @@ class TranscriptionConfig:
     # if True, will also skip writing anything to the output file
     return_transcriptions: bool = False
 
-    # For te_softmax extraction
-    softmax_path : Optional[str] = "/home/jykang/NeMo/data/softmax/train-clean-360"
+    # # For te_softmax extraction
+    # softmax_path : Optional[str] = "/home/jykang/NeMo/data/softmax/train-clean-360"
 
 
 @hydra_runner(config_name="TranscriptionConfig", schema=TranscriptionConfig)
@@ -345,37 +345,37 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
                     augmentor=augmentor,
                 )
 
-    # Extract teacher softmax
-    logging.info(f"Saving teacher softmax to {cfg.softmax_path}")
-    import numpy as np
-    from tqdm.auto import tqdm
-    for idx, trans in tqdm(enumerate(transcriptions)):
-        te_softmax = torch.exp(trans.y_sequence)
-        te_softmax = te_softmax.cpu().numpy()
-        base_file_name = os.path.basename(filepaths[idx])
-        file_name = os.path.splitext(base_file_name)[0]
-        np.save(os.path.join(cfg.softmax_path, file_name), te_softmax)
+    # # Extract teacher softmax
+    # logging.info(f"Saving teacher softmax to {cfg.softmax_path}")
+    # import numpy as np
+    # from tqdm.auto import tqdm
+    # for idx, trans in tqdm(enumerate(transcriptions)):
+    #     te_softmax = torch.exp(trans.y_sequence)
+    #     te_softmax = te_softmax.cpu().numpy()
+    #     base_file_name = os.path.basename(filepaths[idx])
+    #     file_name = os.path.splitext(base_file_name)[0]
+    #     np.save(os.path.join(cfg.softmax_path, file_name), te_softmax)
 
     logging.info(f"Finished transcribing {len(filepaths)} files !")
-    logging.info(f"Writing transcriptions into file: {cfg.output_filename}")
+    # logging.info(f"Writing transcriptions into file: {cfg.output_filename}")
 
-    # if transcriptions form a tuple (from RNNT), extract just "best" hypothesis
-    if type(transcriptions) == tuple and len(transcriptions) == 2:
-        transcriptions = transcriptions[0]
+    # # if transcriptions form a tuple (from RNNT), extract just "best" hypothesis
+    # if type(transcriptions) == tuple and len(transcriptions) == 2:
+    #     transcriptions = transcriptions[0]
 
-    if cfg.return_transcriptions:
-        return transcriptions
+    # if cfg.return_transcriptions:
+    #     return transcriptions
 
-    # write audio transcriptions
-    output_filename, pred_text_attr_name = write_transcription(
-        transcriptions,
-        cfg,
-        model_name,
-        filepaths=filepaths,
-        compute_langs=compute_langs,
-        compute_timestamps=compute_timestamps,
-    )
-    logging.info(f"Finished writing predictions to {output_filename}!")
+    # # write audio transcriptions
+    # output_filename, pred_text_attr_name = write_transcription(
+    #     transcriptions,
+    #     cfg,
+    #     model_name,
+    #     filepaths=filepaths,
+    #     compute_langs=compute_langs,
+    #     compute_timestamps=compute_timestamps,
+    # )
+    # logging.info(f"Finished writing predictions to {output_filename}!")
 
     if cfg.calculate_wer:
         output_manifest_w_wer, total_res, _ = cal_write_wer(
