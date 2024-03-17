@@ -73,7 +73,7 @@ from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 
 
-@hydra_runner(config_path="./conf", config_name="conformer_ctc_bpe_SKD")
+@hydra_runner(config_path="./conf", config_name="conformer_ctc_bpe_Fitnet_SKD")
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
