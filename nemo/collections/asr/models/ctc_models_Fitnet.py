@@ -594,8 +594,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         st_feature = self.st_to_te_dim(st_feature)
         encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
         error = (st_feature - te_feature) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
-        # fitnet_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
-        fitnet_loss = torch.mean(torch.norm(error, p=2, dim=-1).pow(2))
+        fitnet_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
+        # fitnet_loss = torch.mean(torch.norm(error, p=2, dim=-1).pow(2))
 
         loss_value = fitnet_loss
 
@@ -676,8 +676,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         st_feature = self.st_to_te_dim(st_feature)
         encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
         error = (st_feature - te_feature) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
-        # fitnet_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
-        fitnet_loss = torch.mean(torch.norm(error, p=2, dim=-1).pow(2))
+        fitnet_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
+        # fitnet_loss = torch.mean(torch.norm(error, p=2, dim=-1).pow(2))
 
         loss_value = fitnet_loss
 
