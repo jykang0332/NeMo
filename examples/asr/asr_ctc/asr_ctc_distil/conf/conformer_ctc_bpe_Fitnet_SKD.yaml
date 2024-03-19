@@ -41,8 +41,16 @@
 # Note:  They are based on the assumption of max_duration of 20. If you have longer or shorter max_duration, then batch sizes may need to get updated accordingly.
 
 
-name: "Conformer-CTC-BPE-Fitnet-SKD"
-init_from_nemo_model: "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet/2024-03-15_13-12-31/checkpoints/Conformer-CTC-BPE-Fitnet/2024-03-15_13-12-31.nemo"
+###########################################################################################################
+# check AddLayer version
+###########################################################################################################
+
+# name: "Conformer-CTC-BPE-Fitnet-SKD/2024-03-16_00-10-02"
+# init_from_nemo_model: "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet/2024-03-15_13-12-31/checkpoints/Conformer-CTC-BPE-Fitnet/2024-03-15_13-12-31.nemo"
+
+# Addlayer version
+name: "Conformer-CTC-BPE-Fitnet-TeDec-Baseline"
+init_from_nemo_model: "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet-AddLayer/2024-03-18_15-01-38/checkpoints/Conformer-CTC-BPE-Fitnet-AddLayer.nemo"
 
 model:
   sample_rate: 16000
