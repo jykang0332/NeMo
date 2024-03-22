@@ -35,6 +35,12 @@ from nemo.core.classes.mixins import AccessMixin
 from nemo.core.neural_types import AudioSignal, LabelsType, LengthsType, LogprobsType, NeuralType, SpectrogramType
 from nemo.utils import logging
 
+
+######################################################################################################
+# check Addlayer version
+# Find Addlayer ctrl+F
+######################################################################################################
+
 __all__ = ['EncDecCTCModel']
 
 
@@ -56,7 +62,9 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             if "feat_in" not in self._cfg.decoder or (
                 not self._cfg.decoder.feat_in and hasattr(self.encoder, '_feat_out')
             ):
-                self._cfg.decoder.feat_in = self.encoder._feat_out
+                # self._cfg.decoder.feat_in = self.encoder._feat_out
+                # Addlayer version
+                self._cfg.decoder.feat_in = 512
             if "feat_in" not in self._cfg.decoder or not self._cfg.decoder.feat_in:
                 raise ValueError("param feat_in of the decoder's config is not set!")
 
@@ -108,6 +116,9 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
 
         # Adapter modules setup (from ASRAdapterModelMixin)
         self.setup_adapters()
+
+        # Addlayer version
+        self.addlayer = torch.nn.Linear(176, 512)
 
     @torch.no_grad()
     def transcribe(
@@ -540,8 +551,17 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         if self.spec_augmentation is not None and self.training:
             processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
 
+        # encoder_output = self.encoder(audio_signal=processed_signal, length=processed_signal_length)
+        # encoded = encoder_output[0]
+        # encoded_len = encoder_output[1]
+        # log_probs = self.decoder(encoder_output=encoded)
+        # greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
+
+        # Addlayer version
         encoder_output = self.encoder(audio_signal=processed_signal, length=processed_signal_length)
-        encoded = encoder_output[0]
+        encoded = self.addlayer(encoder_output[0].transpose(1, 2))
+        encoded = encoded.transpose(1, 2)
+        # encoded = encoder_output[0]
         encoded_len = encoder_output[1]
         log_probs = self.decoder(encoder_output=encoded)
         greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
