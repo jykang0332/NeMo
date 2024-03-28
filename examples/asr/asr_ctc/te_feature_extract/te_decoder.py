@@ -110,10 +110,10 @@ class ModelChangeConfig:
 @dataclass
 class TranscriptionConfig:
     # Required configs
-    model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments/stt_en_conformer_ctc_large_ls.nemo"  # Path to a .nemo file
+    model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments/stt_en_conformer_ctc_large_ls.nemo"  # Path to a .nemo file
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = "/home/jykang/NeMo/data/dev_clean.json"  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/data/jykang/database/dev_clean.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[
         Union[int, str]
     ] = None  # Used to select a single channel from multichannel audio, or use average across channels
@@ -121,7 +121,7 @@ class TranscriptionConfig:
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
 
     # General configs
-    output_filename: Optional[str] = "/home/jykang/NeMo/data/transcriptions/check.json"
+    output_filename: Optional[str] = "/data/jykang/database/transcriptions/check.json"
     batch_size: int = 1
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.
@@ -225,11 +225,19 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
     asr_model, model_name = setup_model(cfg, map_location)
 
     # print(asr_model.state_dict().keys())
-    te_dec_weight = asr_model.state_dict()['decoder.decoder_layers.0.weight']
-    te_dec_bias = asr_model.state_dict()['decoder.decoder_layers.0.bias']
+    # te_dec_weight = asr_model.state_dict()['decoder.decoder_layers.0.weight']
+    # te_dec_bias = asr_model.state_dict()['decoder.decoder_layers.0.bias']
+        
+    # torch.save(te_dec_weight, '/home/jykang/NeMo/data/decoder/te_dec_weight.pt')
+    # torch.save(te_dec_bias, '/home/jykang/NeMo/data/decoder/te_dec_bias.pt')
 
-    torch.save(te_dec_weight, '/home/jykang/NeMo/data/decoder/te_dec_weight.pt')
-    torch.save(te_dec_bias, '/home/jykang/NeMo/data/decoder/te_dec_bias.pt')
+    # extract all the weights of the last layer of encoder
+    enc_weights = {}
+    for key, value in asr_model.state_dict().items():
+        if 'encoder.layers.17' in key:
+            print(key, value.shape)
+            enc_weights[key] = value
+    torch.save(enc_weights, '/data/jykang/NeMo/data/encoder/17_enc_weights.pt')
 
     exit()
 
