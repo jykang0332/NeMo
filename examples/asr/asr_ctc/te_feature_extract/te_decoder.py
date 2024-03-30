@@ -223,6 +223,7 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
     logging.info(f"Inference will be done on device: {map_location}")
 
     asr_model, model_name = setup_model(cfg, map_location)
+    exit()
 
     # print(asr_model.state_dict().keys())
     # te_dec_weight = asr_model.state_dict()['decoder.decoder_layers.0.weight']
