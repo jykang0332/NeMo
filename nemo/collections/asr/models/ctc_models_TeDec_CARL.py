@@ -212,6 +212,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                     logits, tedec_logits, logits_len, greedy_predictions = self.forward(
                         input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
                     )
+                    # logits = tedec_logits
 
                     if logprobs:
                         # dump log probs per file
