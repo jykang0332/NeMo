@@ -41,8 +41,9 @@
 # Note:  They are based on the assumption of max_duration of 20. If you have longer or shorter max_duration, then batch sizes may need to get updated accordingly.
 
 
-name: "Conformer-CTC-BPE-Fitnet-TeDec-SKD"
-init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet-AddLayer/2024-03-18_15-01-38/checkpoints/Conformer-CTC-BPE-Fitnet-AddLayer.nemo"
+# name: "Conformer-CTC-BPE-Fitnet-TeDec-SKD"
+# init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet-AddLayer/2024-03-18_15-01-38/checkpoints/Conformer-CTC-BPE-Fitnet-AddLayer.nemo"
+name: "Conformer-CTC-BPE-TeDec-CTC"
 
 model:
   sample_rate: 16000
@@ -53,7 +54,7 @@ model:
   train_ds:
     manifest_filepath: "/data/jykang/database/train_clean_100.json,/data/jykang/database/train_clean_360.json,/data/jykang/database/train_other_500.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 24 # you may increase batch_size if your memory allows
+    batch_size: 48 # you may increase batch_size if your memory allows
     shuffle: False
     num_workers: 8
     pin_memory: true
@@ -70,7 +71,7 @@ model:
   validation_ds:
     manifest_filepath: "/data/jykang/database/dev_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 24 # you may increase batch_size if your memory allows
+    batch_size: 48 # you may increase batch_size if your memory allows
     shuffle: false
     use_start_end_token: false
     num_workers: 8
@@ -79,7 +80,7 @@ model:
   test_ds:
     manifest_filepath: "/data/jykang/database/test_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 24 # you may increase batch_size if your memory allows
+    batch_size: 48 # you may increase batch_size if your memory allows
     shuffle: false
     use_start_end_token: false
     num_workers: 8
