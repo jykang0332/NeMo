@@ -72,6 +72,8 @@ from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 
+import torch
+
 
 @hydra_runner(config_path="./conf", config_name="conformer_ctc_bpe_Fitnet_AddLayer")
 def main(cfg):
@@ -83,6 +85,14 @@ def main(cfg):
 
     # Initialize the weights of the model from another model, if provided via config
     asr_model.maybe_init_from_pretrained_checkpoint(cfg)
+
+    # teacher decoder load
+    te_dec_bias = torch.load('/data/jykang/NeMo/data/decoder/te_dec_bias.pt')
+    te_dec_weight = torch.load('/data/jykang/NeMo/data/decoder/te_dec_weight.pt')
+
+    with torch.no_grad():
+        asr_model.state_dict()['decoder.decoder_layers.0.bias'].copy_(te_dec_bias)
+        asr_model.state_dict()['decoder.decoder_layers.0.weight'].copy_(te_dec_weight)
 
     trainer.fit(asr_model)
 
