@@ -77,6 +77,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 cfg.decoder["num_classes"] = len(self.cfg.decoder.vocabulary)
 
         self.decoder = EncDecCTCModel.from_config_dict(self._cfg.decoder)
+        self.decoder.requires_grad_(False)
 
         self.loss = CTCLoss(
             num_classes=self.decoder.num_classes_with_blank - 1,

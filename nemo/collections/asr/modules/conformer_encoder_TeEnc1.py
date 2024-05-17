@@ -342,6 +342,16 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
                     activation=nn.ReLU(True),
                     is_causal=causal_downsampling,
                 )
+                self.te_pre_encode = ConvSubsampling(
+                    subsampling=subsampling,
+                    subsampling_factor=subsampling_factor,
+                    feat_in=feat_in,
+                    feat_out=512,
+                    conv_channels=subsampling_conv_channels,
+                    subsampling_conv_chunking_factor=subsampling_conv_chunking_factor,
+                    activation=nn.ReLU(True),
+                    is_causal=causal_downsampling,
+                )
         else:
             self.pre_encode = nn.Linear(feat_in, d_model)
 
@@ -377,6 +387,13 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
                 dropout_rate=dropout_pre_encoder,
                 max_len=pos_emb_max_len,
                 xscale=self.xscale,
+                dropout_rate_emb=dropout_emb,
+            )
+            self.pos_enc_te = RelPositionalEncoding(
+                d_model=512,
+                dropout_rate=dropout_pre_encoder,
+                max_len=pos_emb_max_len,
+                xscale=math.sqrt(512),
                 dropout_rate_emb=dropout_emb,
             )
         elif self_attention_model == 'rel_pos_local_attn':
@@ -420,6 +437,25 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
             )
             self.layers.append(layer)
 
+        self.te_to_st_linear_layer = torch.nn.Linear(512, 176)
+        self.te_layer = ConformerLayer(
+            d_model=512,
+            d_ff=2048,
+            self_attention_model='rel_pos',
+            global_tokens=0,
+            global_tokens_spacing=1,
+            global_attn_separate=False,
+            n_heads=8,
+            conv_kernel_size=31,
+            conv_norm_type='batch_norm',
+            conv_context_size=[15, 15],
+            dropout=0.1,
+            dropout_att=0.1,
+            pos_bias_u=None,
+            pos_bias_v=None,
+            att_context_size=[-1, -1],
+            )
+        
         if feat_out > 0 and feat_out != self._feat_out:
             self.out_proj = nn.Linear(self._feat_out, feat_out)
             self._feat_out = feat_out
@@ -511,13 +547,15 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
         if self.training and len(self.att_context_size_all) > 1:
             cur_att_context_size = random.choices(self.att_context_size_all, weights=self.att_context_probs)[0]
         else:
-            cur_att_context_size = self.att_context_size # [-1, -1]
+            cur_att_context_size = self.att_context_size
+
         audio_signal = torch.transpose(audio_signal, 1, 2)
 
         if isinstance(self.pre_encode, nn.Linear):
             audio_signal = self.pre_encode(audio_signal)
         else:
-            audio_signal, length = self.pre_encode(x=audio_signal, lengths=length)
+            # audio_signal, length = self.pre_encode(x=audio_signal, lengths=length)
+            audio_signal, length = self.te_pre_encode(x=audio_signal, lengths=length)
             length = length.to(torch.int64)
             # self.streaming_cfg is set by setup_streaming_cfg(), called in the init
             if self.streaming_cfg.drop_extra_pre_encoded > 0 and cache_last_channel is not None:
@@ -540,7 +578,7 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
             cache_len = 0
             offset = None
 
-        audio_signal, pos_emb = self.pos_enc(x=audio_signal, cache_len=cache_len)
+        # audio_signal, pos_emb = self.pos_enc(x=audio_signal, cache_len=cache_len)
 
         # Create the self-attention and padding masks
         pad_mask, att_mask = self._create_masks(
@@ -558,6 +596,18 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
             # Convert caches from the tensor to list
             cache_last_time_next = []
             cache_last_channel_next = []
+
+        audio_signal, pos_emb_te = self.pos_enc_te(x=audio_signal, cache_len=cache_len)
+        audio_signal = self.te_layer(
+            x=audio_signal,
+            att_mask=att_mask,
+            pos_emb=pos_emb_te,
+            pad_mask=pad_mask,
+            cache_last_channel=None,
+            cache_last_time=None,
+        )
+        audio_signal = self.te_to_st_linear_layer(audio_signal)
+        _, pos_emb = self.pos_enc(x=audio_signal, cache_len=cache_len)
 
         for lth, (drop_prob, layer) in enumerate(zip(self.layer_drop_probs, self.layers)):
             original_signal = audio_signal
@@ -666,6 +716,7 @@ class ConformerEncoder(NeuralModule, StreamingEncoder, Exportable, AccessMixin):
         self.max_audio_length = max_audio_length
         device = next(self.parameters()).device
         self.pos_enc.extend_pe(max_audio_length, device)
+        self.pos_enc_te.extend_pe(max_audio_length, device)
 
     def _create_masks(self, att_context_size, padding_length, max_audio_length, offset, device):
         if self.self_attention_model != "rel_pos_local_attn":

@@ -110,10 +110,14 @@ class ModelChangeConfig:
 @dataclass
 class TranscriptionConfig:
     # Required configs
-    model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments/stt_en_conformer_ctc_large_ls.nemo"  # Path to a .nemo file
+    # model_path: Optional[str] = '/data/jykang/NeMo/nemo_experiments/stt_en_conformer_ctc_large_ls.nemo'
+    # model_path: Optional[str] = '/data/jykang/NeMo/nemo_experiments/CTC_Teacher_Decoder_Reusing/Conformer-CTC-BPE-Fitnet-AddLayer/2024-04-04_23-44-32/checkpoints/Conformer-CTC-BPE-Fitnet-AddLayer.nemo'
+    model_path: Optional[str] = '/data/jykang/NeMo/nemo_experiments/CTC_Teacher_Decoder_Reusing/Conformer-CTC-BPE-TeDec/2024-04-05_00-16-24 (Large)/checkpoints/Conformer-CTC-BPE-TeDec-CTC/2024-04-05_00-16-24.nemo'
+    # model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments/stt_en_conformer_transducer_large_ls.nemo"
+    # model_path: Optional[str] = '/data/jykang/NeMo/nemo_experiments/Conformer-Transducer-BPE-Fitnet-TeDecJoint/2024-04-10_14-40-18/checkpoints/Conformer-Transducer-BPE-Fitnet-TeDecJoint.nemo'
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = "/data/jykang/database/dev_clean.json"  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/data/jykang/database/debug3.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[
         Union[int, str]
     ] = None  # Used to select a single channel from multichannel audio, or use average across channels
@@ -121,7 +125,7 @@ class TranscriptionConfig:
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
 
     # General configs
-    output_filename: Optional[str] = "/data/jykang/database/transcriptions/check.json"
+    output_filename: Optional[str] = "/data/jykang/NeMo/data/transcriptions/debug.json"
     batch_size: int = 1
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.
@@ -223,24 +227,6 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
     logging.info(f"Inference will be done on device: {map_location}")
 
     asr_model, model_name = setup_model(cfg, map_location)
-
-
-    # print(asr_model.state_dict().keys())
-    # te_dec_weight = asr_model.state_dict()['decoder.decoder_layers.0.weight']
-    # te_dec_bias = asr_model.state_dict()['decoder.decoder_layers.0.bias']
-        
-    # torch.save(te_dec_weight, '/home/jykang/NeMo/data/decoder/te_dec_weight.pt')
-    # torch.save(te_dec_bias, '/home/jykang/NeMo/data/decoder/te_dec_bias.pt')
-
-    # # extract all the weights of the last layer of encoder
-    # enc_weights = {}
-    # for key, value in asr_model.state_dict().items():
-    #     if 'encoder.layers.17' in key:
-    #         print(key, value.shape)
-    #         enc_weights[key] = value
-    # torch.save(enc_weights, '/data/jykang/NeMo/data/encoder/17_enc_weights.pt')
-
-    exit()
 
     trainer = pl.Trainer(devices=device, accelerator=accelerator)
     asr_model.set_trainer(trainer)
@@ -359,17 +345,18 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
                     channel_selector=cfg.channel_selector,
                     augmentor=augmentor,
                 )
-
-    # # Extract teacher softmax
-    # logging.info(f"Saving teacher softmax to {cfg.softmax_path}")
-    # import numpy as np
-    # from tqdm.auto import tqdm
+    
     # for idx, trans in tqdm(enumerate(transcriptions)):
     #     te_softmax = torch.exp(trans.y_sequence)
     #     te_softmax = te_softmax.cpu().numpy()
-    #     base_file_name = os.path.basename(filepaths[idx])
-    #     file_name = os.path.splitext(base_file_name)[0]
-    #     np.save(os.path.join(cfg.softmax_path, file_name), te_softmax)
+
+    # ctc
+    softmax = torch.exp(transcriptions[0].y_sequence)
+    greedy_sft = torch.argmax(softmax, dim=-1)
+
+    print(greedy_sft)
+
+    exit()
 
     logging.info(f"Finished transcribing {len(filepaths)} files !")
     logging.info(f"Writing transcriptions into file: {cfg.output_filename}")

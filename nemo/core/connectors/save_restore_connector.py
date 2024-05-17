@@ -113,6 +113,7 @@ class SaveRestoreConnector:
 
         app_state = AppState()
         with tempfile.TemporaryDirectory() as tmpdir:
+        # tmpdir = '/data/jykang/NeMo/tmp/'
             try:
                 # Check if self.model_extracted_dir is set, and is a valid path
                 if self.model_extracted_dir is not None and os.path.isdir(self.model_extracted_dir):

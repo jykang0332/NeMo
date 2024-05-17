@@ -1,9 +1,12 @@
 data
+data_rnnt
 nemo_experiments_transducer
 nemo_experiments
 nemo_experiments_ctc
 nemo_experiments_tdt
 evaluation_transcripts.json
+*.ckpt
+tokenizer
 
 # log and data files
 *.model

@@ -24,6 +24,7 @@ from omegaconf import OmegaConf, open_dict
 from nemo.collections.asr.metrics.rnnt_wer import RNNTDecodingConfig
 from nemo.collections.asr.metrics.wer import CTCDecodingConfig
 from nemo.collections.asr.models import EncDecCTCModel, EncDecHybridRNNTCTCModel
+
 from nemo.collections.asr.modules.conformer_encoder import ConformerChangeConfig
 from nemo.collections.asr.parts.utils.eval_utils import cal_write_wer
 from nemo.collections.asr.parts.utils.rnnt_utils import Hypothesis
@@ -110,10 +111,10 @@ class ModelChangeConfig:
 @dataclass
 class TranscriptionConfig:
     # Required configs
-    model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments/stt_en_conformer_ctc_large_ls.nemo"  # Path to a .nemo file
+    model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments/stt_en_conformer_transducer_large_ls.nemo"  # Path to a .nemo file
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = "/data/jykang/database/dev_clean.json"  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/home/jykang/NeMo/data/test_other.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[
         Union[int, str]
     ] = None  # Used to select a single channel from multichannel audio, or use average across channels
@@ -121,7 +122,7 @@ class TranscriptionConfig:
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
 
     # General configs
-    output_filename: Optional[str] = "/data/jykang/database/transcriptions/check.json"
+    output_filename: Optional[str] = "/home/jykang/NeMo/data/transcriptions/check.json"
     batch_size: int = 1
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.
@@ -223,24 +224,6 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
     logging.info(f"Inference will be done on device: {map_location}")
 
     asr_model, model_name = setup_model(cfg, map_location)
-
-
-    # print(asr_model.state_dict().keys())
-    # te_dec_weight = asr_model.state_dict()['decoder.decoder_layers.0.weight']
-    # te_dec_bias = asr_model.state_dict()['decoder.decoder_layers.0.bias']
-        
-    # torch.save(te_dec_weight, '/home/jykang/NeMo/data/decoder/te_dec_weight.pt')
-    # torch.save(te_dec_bias, '/home/jykang/NeMo/data/decoder/te_dec_bias.pt')
-
-    # # extract all the weights of the last layer of encoder
-    # enc_weights = {}
-    # for key, value in asr_model.state_dict().items():
-    #     if 'encoder.layers.17' in key:
-    #         print(key, value.shape)
-    #         enc_weights[key] = value
-    # torch.save(enc_weights, '/data/jykang/NeMo/data/encoder/17_enc_weights.pt')
-
-    exit()
 
     trainer = pl.Trainer(devices=device, accelerator=accelerator)
     asr_model.set_trainer(trainer)
@@ -360,17 +343,6 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
                     augmentor=augmentor,
                 )
 
-    # # Extract teacher softmax
-    # logging.info(f"Saving teacher softmax to {cfg.softmax_path}")
-    # import numpy as np
-    # from tqdm.auto import tqdm
-    # for idx, trans in tqdm(enumerate(transcriptions)):
-    #     te_softmax = torch.exp(trans.y_sequence)
-    #     te_softmax = te_softmax.cpu().numpy()
-    #     base_file_name = os.path.basename(filepaths[idx])
-    #     file_name = os.path.splitext(base_file_name)[0]
-    #     np.save(os.path.join(cfg.softmax_path, file_name), te_softmax)
-
     logging.info(f"Finished transcribing {len(filepaths)} files !")
     logging.info(f"Writing transcriptions into file: {cfg.output_filename}")
 
@@ -381,29 +353,29 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
     if cfg.return_transcriptions:
         return transcriptions
 
-    # write audio transcriptions
-    output_filename, pred_text_attr_name = write_transcription(
-        transcriptions,
-        cfg,
-        model_name,
-        filepaths=filepaths,
-        compute_langs=compute_langs,
-        compute_timestamps=compute_timestamps,
-    )
-    logging.info(f"Finished writing predictions to {output_filename}!")
+    # # write audio transcriptions
+    # output_filename, pred_text_attr_name = write_transcription(
+    #     transcriptions,
+    #     cfg,
+    #     model_name,
+    #     filepaths=filepaths,
+    #     compute_langs=compute_langs,
+    #     compute_timestamps=compute_timestamps,
+    # )
+    # logging.info(f"Finished writing predictions to {output_filename}!")
 
-    if cfg.calculate_wer:
-        output_manifest_w_wer, total_res, _ = cal_write_wer(
-            pred_manifest=output_filename,
-            pred_text_attr_name=pred_text_attr_name,
-            clean_groundtruth_text=cfg.clean_groundtruth_text,
-            langid=cfg.langid,
-            use_cer=cfg.use_cer,
-            output_filename=None,
-        )
-        if output_manifest_w_wer:
-            logging.info(f"Writing prediction and error rate of each sample to {output_manifest_w_wer}!")
-            logging.info(f"{total_res}")
+    # if cfg.calculate_wer:
+    #     output_manifest_w_wer, total_res, _ = cal_write_wer(
+    #         pred_manifest=output_filename,
+    #         pred_text_attr_name=pred_text_attr_name,
+    #         clean_groundtruth_text=cfg.clean_groundtruth_text,
+    #         langid=cfg.langid,
+    #         use_cer=cfg.use_cer,
+    #         output_filename=None,
+    #     )
+    #     if output_manifest_w_wer:
+    #         logging.info(f"Writing prediction and error rate of each sample to {output_manifest_w_wer}!")
+    #         logging.info(f"{total_res}")
 
     return cfg
 

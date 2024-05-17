@@ -41,8 +41,7 @@
 # Note:  They are based on the assumption of max_duration of 20. If you have longer or shorter max_duration, then batch sizes may need to get updated accordingly.
 
 
-# name: "Conformer-CTC-BPE"
-name: "test"
+name: "Conformer-CTC-BPE-TeDecEnc1"
 
 model:
   sample_rate: 16000
@@ -53,8 +52,8 @@ model:
   train_ds:
     manifest_filepath: "/data/jykang/database/train_clean_100.json,/data/jykang/database/train_clean_360.json,/data/jykang/database/train_other_500.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 32 # you may increase batch_size if your memory allows
-    shuffle: true
+    batch_size: 24 # you may increase batch_size if your memory allows
+    shuffle: false
     num_workers: 8
     pin_memory: true
     max_duration: 16.7 # it is set for LibriSpeech, you may need to update it for your dataset
@@ -70,7 +69,7 @@ model:
   validation_ds:
     manifest_filepath: "/data/jykang/database/dev_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 32 # you may increase batch_size if your memory allows
+    batch_size: 24 # you may increase batch_size if your memory allows
     shuffle: false
     use_start_end_token: false
     num_workers: 8
@@ -79,7 +78,7 @@ model:
   test_ds:
     manifest_filepath: "/data/jykang/database/test_clean.json"
     sample_rate: ${model.sample_rate}
-    batch_size: 32 # you may increase batch_size if your memory allows
+    batch_size: 24 # you may increase batch_size if your memory allows
     shuffle: false
     use_start_end_token: false
     num_workers: 8
@@ -115,11 +114,11 @@ model:
     time_width: 0.05
 
   encoder:
-    _target_: nemo.collections.asr.modules.ConformerEncoder
+    _target_: nemo.collections.asr.modules.conformer_encoder_TeEnc1.ConformerEncoder
     feat_in: ${model.preprocessor.features}
     feat_out: -1 # you may set it if you need different output size other than the default d_model
-    n_layers: 16
-    d_model: 176
+    n_layers: 15
+    d_model: 176 
 
     # Sub-sampling params
     subsampling: striding # vggnet, striding, stacking or stacking_norm, dw_striding
@@ -156,7 +155,7 @@ model:
     # set to non-zero to enable stochastic depth
     stochastic_depth_drop_prob: 0.0
     stochastic_depth_mode: linear  # linear or uniform
-    stochastic_depth_start_layer: 1
+    stochastic_depth_start_layer: 1 
 
   decoder:
     _target_: nemo.collections.asr.modules.ConvASRDecoder

@@ -67,24 +67,37 @@ https://docs.nvidia.com/deeplearning/nemo/user-guide/docs/en/main/asr/results.ht
 import pytorch_lightning as pl
 from omegaconf import OmegaConf
 
-from nemo.collections.asr.models.ctc_bpe_models_TeEnc_NoDistill import EncDecCTCModelBPE
+from nemo.collections.asr.models.ctc_bpe_models_AddLayer import EncDecCTCModelBPE
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 
 import torch
-
-
-@hydra_runner(config_path="./conf", config_name="conformer_ctc_bpe_AddEnc_NoDistill")
+@hydra_runner(config_path="./conf", config_name="conformer_ctc_bpe_Fitnet_AddLayer")
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
-
     trainer = pl.Trainer(**cfg.trainer)
     exp_manager(trainer, cfg.get("exp_manager", None))
     asr_model = EncDecCTCModelBPE(cfg=cfg.model, trainer=trainer)
 
+    te_tmp_bias = asr_model.state_dict()['decoder.decoder_layers.0.bias']
+    te_tmp_weight = asr_model.state_dict()['decoder.decoder_layers.0.weight']
+    b = te_tmp_bias.clone()
+    w = te_tmp_weight.clone()
+    
     # Initialize the weights of the model from another model, if provided via config
     asr_model.maybe_init_from_pretrained_checkpoint(cfg)
+
+    # # teacher decoder load
+    # te_dec_bias = torch.load('/data/jykang/NeMo/data/decoder/te_dec_bias.pt')
+    # te_dec_weight = torch.load('/data/jykang/NeMo/data/decoder/te_dec_weight.pt')
+    # with torch.no_grad():
+    #     asr_model.state_dict()['decoder.decoder_layers.0.bias'].copy_(te_dec_bias)
+    #     asr_model.state_dict()['decoder.decoder_layers.0.weight'].copy_(te_dec_weight)
+
+    with torch.no_grad():
+        asr_model.state_dict()['decoder.decoder_layers.0.bias'].copy_(b)
+        asr_model.state_dict()['decoder.decoder_layers.0.weight'].copy_(w)
     
     trainer.fit(asr_model)
 

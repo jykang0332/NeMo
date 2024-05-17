@@ -586,9 +586,9 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         else:
             log_every_n_steps = 1
 
-        # loss_value = self.loss(
-        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
-        # )
+        ctc_loss_value = self.loss(
+            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        )
 
         # shape matching
         st_feature = st_feature.transpose(1,2)
@@ -596,13 +596,13 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
            te_feature = te_feature[:, :st_feature.shape[1], :]
 
         # Fitnet loss
-        # st_feature = self.st_to_te_dim(st_feature)
         encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
         error = (st_feature - te_feature) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
         fitnet_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
         # fitnet_loss = torch.mean(torch.norm(error, p=2, dim=-1).pow(2))
 
-        loss_value = fitnet_loss
+        # loss_value = fitnet_loss
+        loss_value = ctc_loss_value + fitnet_loss * 0.002
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -618,6 +618,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         tensorboard_logs.update(
             {
                 'train_loss': loss_value,
+                'ctc_loss': ctc_loss_value,
+                'fitnet_loss': fitnet_loss,
                 'learning_rate': self._optimizer.param_groups[0]['lr'],
                 'global_step': torch.tensor(self.trainer.global_step, dtype=torch.float32),
             }
@@ -668,9 +670,9 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             # log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
             log_probs, encoded_len, predictions, st_feature = self.forward(input_signal=signal, input_signal_length=signal_len)
 
-        # loss_value = self.loss(
-        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
-        # )
+        ctc_loss_value = self.loss(
+            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        )
 
         # shape matching
         st_feature = st_feature.transpose(1,2)
@@ -678,13 +680,13 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
            te_feature = te_feature[:, :st_feature.shape[1], :]
 
         # Fitnet loss
-        # st_feature = self.st_to_te_dim(st_feature)
         encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
         error = (st_feature - te_feature) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
         fitnet_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
         # fitnet_loss = torch.mean(torch.norm(error, p=2, dim=-1).pow(2))
 
-        loss_value = fitnet_loss
+        # loss_value = fitnet_loss
+        loss_value = ctc_loss_value + fitnet_loss * 0.002
 
         loss_value, metrics = self.add_interctc_losses(
             loss_value, transcript, transcript_len, compute_wer=True, log_wer_num_denom=True, log_prefix="val_",
@@ -695,7 +697,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         )
         wer, wer_num, wer_denom = self._wer.compute()
         self._wer.reset()
-        metrics.update({'val_loss': loss_value, 'val_wer_num': wer_num, 'val_wer_denom': wer_denom, 'val_wer': wer})
+        metrics.update({'val_loss': loss_value, 'ctc_loss': ctc_loss_value, 'fitnet_loss': fitnet_loss, 'val_wer_num': wer_num, 'val_wer_denom': wer_denom, 'val_wer': wer})
 
         self.log('global_step', torch.tensor(self.trainer.global_step, dtype=torch.float32))
 

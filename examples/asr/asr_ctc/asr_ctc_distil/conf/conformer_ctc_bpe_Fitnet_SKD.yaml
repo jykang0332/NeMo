@@ -45,12 +45,9 @@
 # check AddLayer version
 ###########################################################################################################
 
-name: "Conformer-CTC-BPE-Fitnet-SKD/2024-03-16_00-10-02"
-init_from_nemo_model: "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet/2024-03-15_13-12-31/checkpoints/Conformer-CTC-BPE-Fitnet/2024-03-15_13-12-31.nemo"
+name: "Conformer-CTC-BPE-Fitnet-AddLayer-SKD"
+init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/CTC_Teacher_Decoder_Reusing/Conformer-CTC-BPE-Fitnet-AddLayer/2024-04-04_23-44-32/checkpoints/Conformer-CTC-BPE-Fitnet-AddLayer.nemo"
 
-# # Addlayer version
-# name: "Conformer-CTC-BPE-Fitnet-TeDec-Baseline"
-# init_from_nemo_model: "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet-AddLayer/2024-03-18_15-01-38/checkpoints/Conformer-CTC-BPE-Fitnet-AddLayer.nemo"
 
 model:
   sample_rate: 16000
@@ -59,7 +56,7 @@ model:
   skip_nan_grad: false
 
   train_ds:
-    manifest_filepath: "/home/jykang/NeMo/data/train_clean_100.json,/home/jykang/NeMo/data/train_clean_360.json,/home/jykang/NeMo/data/train_other_500.json"
+    manifest_filepath: "/data/jykang/database/train_clean_100.json,/data/jykang/database/train_clean_360.json,/data/jykang/database/train_other_500.json"
     sample_rate: ${model.sample_rate}
     batch_size: 24 # you may increase batch_size if your memory allows
     shuffle: False
@@ -76,7 +73,7 @@ model:
     bucketing_batch_size: null
 
   validation_ds:
-    manifest_filepath: "/home/jykang/NeMo/data/dev_clean.json"
+    manifest_filepath: "/data/jykang/database/dev_clean.json"
     sample_rate: ${model.sample_rate}
     batch_size: 24 # you may increase batch_size if your memory allows
     shuffle: false
@@ -85,7 +82,7 @@ model:
     pin_memory: true
 
   test_ds:
-    manifest_filepath: "/home/jykang/NeMo/data/test_clean.json"
+    manifest_filepath: "/data/jykang/database/test_clean.json"
     sample_rate: ${model.sample_rate}
     batch_size: 24 # you may increase batch_size if your memory allows
     shuffle: false
@@ -96,7 +93,7 @@ model:
   # recommend to SPE Unigram tokenizer with small vocab size of 128 or 256 when using 4x sub-sampling
   # you may find more detail on how to train a tokenizer at: /scripts/tokenizers/process_asr_text_tokenizer.py
   tokenizer:
-    dir: "/home/jykang/NeMo/tokenizer"  # path to directory which contains either tokenizer.model (bpe) or vocab.txt (wpe)
+    dir: "/data/jykang/NeMo/tokenizer/ctc"  # path to directory which contains either tokenizer.model (bpe) or vocab.txt (wpe)
     type: bpe  # Can be either bpe (SentencePiece tokenizer) or wpe (WordPiece tokenizer)
 
   preprocessor:

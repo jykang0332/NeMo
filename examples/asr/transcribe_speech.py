@@ -110,14 +110,10 @@ class ModelChangeConfig:
 @dataclass
 class TranscriptionConfig:
     # Required configs
-    # model_path: Optional[str] = "/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE/2024-03-01_21-25-17/checkpoints/Conformer-CTC-BPE.nemo"  # Path to a .nemo file
-    # model_path: Optional[str] = '/home/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-SKD/2024-03-05_20-33-47/checkpoints/Conformer-CTC-BPE-SKD.nemo'
-    # model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet-TeDec-SKD/2024-03-18_22-00-19/checkpoints/Conformer-CTC-BPE-Fitnet-TeDec/2024-03-18_22-00-19.nemo"
-    # model_path: Optional[str] = '/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet-TeDec-CARL-SKD/2024-03-22_03-29-29/checkpoints/Conformer-CTC-BPE-Fitnet-TeDec-CARL-SKD.nemo'
-    model_path: Optional[str] = '/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet-AddLayer/2024-03-18_15-01-38/checkpoints/Conformer-CTC-BPE-Fitnet-AddLayer.nemo'
+    model_path: Optional[str] = '/data/jykang/NeMo/nemo_experiments/stt_en_conformer_transducer_large_ls.nemo'
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = "/data/jykang/database/dev_clean.json"  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/data/jykang/database/debug.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[
         Union[int, str]
     ] = None  # Used to select a single channel from multichannel audio, or use average across channels

@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# jykang
-#############################################################################
-# Teacher Feature Extract check !!!!
-#############################################################################
-import numpy as np
-from tqdm.auto import tqdm
-
-
 import copy
 import json
 import os
@@ -65,7 +56,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             if "feat_in" not in self._cfg.decoder or (
                 not self._cfg.decoder.feat_in and hasattr(self.encoder, '_feat_out')
             ):
-                self._cfg.decoder.feat_in = self.encoder._feat_out
+                # self._cfg.decoder.feat_in = self.encoder._feat_out
+                self._cfg.decoder.feat_in = 512
             if "feat_in" not in self._cfg.decoder or not self._cfg.decoder.feat_in:
                 raise ValueError("param feat_in of the decoder's config is not set!")
 
@@ -78,6 +70,9 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 cfg.decoder["num_classes"] = len(self.cfg.decoder.vocabulary)
 
         self.decoder = EncDecCTCModel.from_config_dict(self._cfg.decoder)
+
+        # self.encoder.te_layer.requires_grad_(False)
+        self.decoder.requires_grad_(False)
 
         self.loss = CTCLoss(
             num_classes=self.decoder.num_classes_with_blank - 1,
@@ -118,10 +113,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         # Adapter modules setup (from ASRAdapterModelMixin)
         self.setup_adapters()
 
-        ######################################################################################
-        # check
-        self.te_feature_extract = True
-        ######################################################################################
+        self.addlayer = torch.nn.Linear(176, 512)
 
     @torch.no_grad()
     def transcribe(
@@ -207,28 +199,11 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 if augmentor:
                     config['augmentor'] = augmentor
 
-                data_i = 0
                 temporary_datalayer = self._setup_transcribe_dataloader(config)
                 for test_batch in tqdm(temporary_datalayer, desc="Transcribing", disable=not verbose):
-                    
-                    if self.te_feature_extract:
-                        logits, logits_len, greedy_predictions, te_encoded = self.forward(
-                            input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
-                        )
-                    else:
-                        logits, logits_len, greedy_predictions = self.forward(
-                            input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
-                        )
-                    
-                    # Extract te_feature
-                    if self.te_feature_extract:
-                        logging.info(f"Saving teacher feature")
-                        parts = paths2audio_files[data_i].split('/')
-                        filename = '/'.join(parts[-2:])
-                        filename = filename.replace('-processed', '').replace('.wav', '.npy')
-                        save_path = os.path.join('/data/jykang/NeMo/data/feature_medium/', filename)
-                        np.save(save_path, te_encoded.squeeze(0).cpu().numpy())
-                        data_i += 1
+                    logits, logits_len, greedy_predictions, _, _ = self.forward(
+                        input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
+                    )
          
                     if logprobs:
                         # dump log probs per file
@@ -256,9 +231,6 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                     del greedy_predictions
                     del logits
                     del test_batch
-
-                print('!!!!!', data_i)
-                
         finally:
             # set mode back to its original value
             self.train(mode=mode)
@@ -442,7 +414,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         # preserve config
         self._update_dataset_config(dataset_name='train', config=train_data_config)
 
-        self._train_dl = self._setup_dataloader_from_config(config=train_data_config)
+        self._train_dl = self._setup_dataloader_from_config_fea_KD(config=train_data_config)
 
         # Need to set this because if using an IterableDataset, the length of the dataloader is the total number
         # of samples rather than the number of batches, and this messes up the tqdm progress bar.
@@ -487,7 +459,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         # preserve config
         self._update_dataset_config(dataset_name='validation', config=val_data_config)
 
-        self._validation_dl = self._setup_dataloader_from_config(config=val_data_config)
+        self._validation_dl = self._setup_dataloader_from_config_fea_KD(config=val_data_config)
 
     def setup_test_data(self, test_data_config: Optional[Union[DictConfig, Dict]]):
         """
@@ -575,23 +547,19 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
 
         encoder_output = self.encoder(audio_signal=processed_signal, length=processed_signal_length)
-        encoded = encoder_output[0]
+        encoded = self.addlayer(encoder_output[0].transpose(1, 2))
+        encoded = encoded.transpose(1, 2)
+        # encoded = encoder_output[0]
         encoded_len = encoder_output[1]
+        encoded_1 = encoder_output[2]
         log_probs = self.decoder(encoder_output=encoded)
         greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
-
-        if self.te_feature_extract:
-            return (
-            log_probs,
-            encoded_len,
-            greedy_predictions,
-            encoded
-        )
-
         return (
             log_probs,
             encoded_len,
             greedy_predictions,
+            encoded,
+            encoded_1
         )
 
     # PTL-specific methods
@@ -603,22 +571,40 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         if self.is_interctc_enabled():
             AccessMixin.set_access_enabled(access_enabled=True)
 
-        signal, signal_len, transcript, transcript_len = batch
+        signal, signal_len, transcript, transcript_len, te_feature, te_feature_len, te_feature_1 = batch
+
         if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
             log_probs, encoded_len, predictions = self.forward(
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, predictions, st_feature, st_feature_1 = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         if hasattr(self, '_trainer') and self._trainer is not None:
             log_every_n_steps = self._trainer.log_every_n_steps
         else:
             log_every_n_steps = 1
 
-        loss_value = self.loss(
-            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
-        )
+        # loss_value = self.loss(
+        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        # )
+
+        st_feature = st_feature.transpose(1, 2)
+        # st_feature_1 = st_feature_1.transpose(1, 2)
+        if st_feature.shape[1] != te_feature.shape[1]:
+           te_feature = te_feature[:, :st_feature.shape[1], :]
+        #    te_feature_1 = te_feature_1[:, :st_feature_1.shape[1], :]
+        
+        # fitnet loss
+        encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
+        error = (st_feature - te_feature) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
+        fitnet_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
+
+        # error_1 = (st_feature_1 - te_feature_1) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
+        # fitnet_loss_1 = torch.mean(torch.sum(torch.norm(error_1, p=2, dim=-1).pow(2), dim=-1))
+
+        # loss_value = fitnet_loss + fitnet_loss_1  
+        loss_value = fitnet_loss
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -634,6 +620,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         tensorboard_logs.update(
             {
                 'train_loss': loss_value,
+                'fitnet_loss': fitnet_loss,
+                # 'fitnet_loss_1': fitnet_loss_1,
                 'learning_rate': self._optimizer.param_groups[0]['lr'],
                 'global_step': torch.tensor(self.trainer.global_step, dtype=torch.float32),
             }
@@ -659,7 +647,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, predictions, _, _ = self.forward(input_signal=signal, input_signal_length=signal_len)
 
         transcribed_texts, _ = self._wer.decoding.ctc_decoder_predictions_tensor(
             decoder_outputs=log_probs, decoder_lengths=encoded_len, return_hypotheses=False,
@@ -672,17 +660,36 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         if self.is_interctc_enabled():
             AccessMixin.set_access_enabled(access_enabled=True)
 
-        signal, signal_len, transcript, transcript_len = batch
+        # signal, signal_len, transcript, transcript_len = batch
+        signal, signal_len, transcript, transcript_len, te_feature, te_feature_len, te_feature_1 = batch
+
         if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
             log_probs, encoded_len, predictions = self.forward(
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
+            log_probs, encoded_len, predictions, st_feature, st_feature_1 = self.forward(input_signal=signal, input_signal_length=signal_len)
 
-        loss_value = self.loss(
-            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
-        )
+        st_feature = st_feature.transpose(1, 2)
+        # st_feature_1 = st_feature_1.transpose(1, 2)
+        if st_feature.shape[1] != te_feature.shape[1]:
+           te_feature = te_feature[:, :st_feature.shape[1], :]
+        #    te_feature_1 = te_feature_1[:, :st_feature_1.shape[1], :]
+        
+        # fitnet loss
+        encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
+        error = (st_feature - te_feature) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
+        fitnet_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
+
+        # error_1 = (st_feature_1 - te_feature_1) * encoded_mask.unsqueeze(-1)  # (B, T, 512)
+        # fitnet_loss_1 = torch.mean(torch.sum(torch.norm(error_1, p=2, dim=-1).pow(2), dim=-1))
+
+        # loss_value = fitnet_loss + fitnet_loss_1 
+        loss_value = fitnet_loss
+        
+        # loss_value = self.loss(
+        #     log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        # )
         loss_value, metrics = self.add_interctc_losses(
             loss_value, transcript, transcript_len, compute_wer=True, log_wer_num_denom=True, log_prefix="val_",
         )

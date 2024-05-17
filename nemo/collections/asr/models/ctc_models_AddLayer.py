@@ -11,15 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# jykang
-#############################################################################
-# Teacher Feature Extract check !!!!
-#############################################################################
-import numpy as np
-from tqdm.auto import tqdm
-
-
 import copy
 import json
 import os
@@ -65,7 +56,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             if "feat_in" not in self._cfg.decoder or (
                 not self._cfg.decoder.feat_in and hasattr(self.encoder, '_feat_out')
             ):
-                self._cfg.decoder.feat_in = self.encoder._feat_out
+                # self._cfg.decoder.feat_in = self.encoder._feat_out
+                self._cfg.decoder.feat_in = 512
             if "feat_in" not in self._cfg.decoder or not self._cfg.decoder.feat_in:
                 raise ValueError("param feat_in of the decoder's config is not set!")
 
@@ -78,6 +70,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 cfg.decoder["num_classes"] = len(self.cfg.decoder.vocabulary)
 
         self.decoder = EncDecCTCModel.from_config_dict(self._cfg.decoder)
+        # self.decoder.requires_grad_(False)
 
         self.loss = CTCLoss(
             num_classes=self.decoder.num_classes_with_blank - 1,
@@ -118,10 +111,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         # Adapter modules setup (from ASRAdapterModelMixin)
         self.setup_adapters()
 
-        ######################################################################################
-        # check
-        self.te_feature_extract = True
-        ######################################################################################
+        self.addlayer = torch.nn.Linear(176, 512)
 
     @torch.no_grad()
     def transcribe(
@@ -207,28 +197,11 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 if augmentor:
                     config['augmentor'] = augmentor
 
-                data_i = 0
                 temporary_datalayer = self._setup_transcribe_dataloader(config)
                 for test_batch in tqdm(temporary_datalayer, desc="Transcribing", disable=not verbose):
-                    
-                    if self.te_feature_extract:
-                        logits, logits_len, greedy_predictions, te_encoded = self.forward(
-                            input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
-                        )
-                    else:
-                        logits, logits_len, greedy_predictions = self.forward(
-                            input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
-                        )
-                    
-                    # Extract te_feature
-                    if self.te_feature_extract:
-                        logging.info(f"Saving teacher feature")
-                        parts = paths2audio_files[data_i].split('/')
-                        filename = '/'.join(parts[-2:])
-                        filename = filename.replace('-processed', '').replace('.wav', '.npy')
-                        save_path = os.path.join('/data/jykang/NeMo/data/feature_medium/', filename)
-                        np.save(save_path, te_encoded.squeeze(0).cpu().numpy())
-                        data_i += 1
+                    logits, logits_len, greedy_predictions = self.forward(
+                        input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device)
+                    )
          
                     if logprobs:
                         # dump log probs per file
@@ -256,9 +229,6 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                     del greedy_predictions
                     del logits
                     del test_batch
-
-                print('!!!!!', data_i)
-                
         finally:
             # set mode back to its original value
             self.train(mode=mode)
@@ -534,7 +504,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             "greedy_predictions": NeuralType(('B', 'T'), LabelsType()),
         }
 
-    # @typecheck()
+    @typecheck()
     def forward(
         self, input_signal=None, input_signal_length=None, processed_signal=None, processed_signal_length=None
     ):
@@ -574,20 +544,19 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         if self.spec_augmentation is not None and self.training:
             processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
 
+        # encoder_output = self.encoder(audio_signal=processed_signal, length=processed_signal_length)
+        # encoded = encoder_output[0]
+        # encoded_len = encoder_output[1]
+        # log_probs = self.decoder(encoder_output=encoded)
+        # greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
+
         encoder_output = self.encoder(audio_signal=processed_signal, length=processed_signal_length)
-        encoded = encoder_output[0]
+        encoded = self.addlayer(encoder_output[0].transpose(1, 2))
+        encoded = encoded.transpose(1, 2)
+        # encoded = encoder_output[0]
         encoded_len = encoder_output[1]
         log_probs = self.decoder(encoder_output=encoded)
         greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
-
-        if self.te_feature_extract:
-            return (
-            log_probs,
-            encoded_len,
-            greedy_predictions,
-            encoded
-        )
-
         return (
             log_probs,
             encoded_len,
