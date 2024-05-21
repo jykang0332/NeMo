@@ -9,6 +9,7 @@ nemo_experiments_tedec
 evaluation_transcripts.json
 *.ckpt
 tokenizer
+decoders
 
 # log and data files
 *.model
