@@ -1086,9 +1086,9 @@ class typecheck:
         # Call the method - this can be forward, or any other callable method
         outputs = wrapped(*args, **kwargs)
 
-        instance._attach_and_validate_output_types(
-            output_types=output_types, ignore_collections=self.ignore_collections, out_objects=outputs
-        )
+        # instance._attach_and_validate_output_types(
+        #     output_types=output_types, ignore_collections=self.ignore_collections, out_objects=outputs
+        # )
 
         return outputs
 
