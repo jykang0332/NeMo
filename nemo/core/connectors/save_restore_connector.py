@@ -113,6 +113,7 @@ class SaveRestoreConnector:
 
         app_state = AppState()
         with tempfile.TemporaryDirectory() as tmpdir:
+        # tmpdir = '/data/jykang/NeMo/tmp/'
             try:
                 # Check if self.model_extracted_dir is set, and is a valid path
                 if self.model_extracted_dir is not None and os.path.isdir(self.model_extracted_dir):
@@ -167,6 +168,7 @@ class SaveRestoreConnector:
                 if app_state.model_parallel_size is not None and app_state.model_parallel_size > 1:
                     model_weights = self._inject_model_parallel_rank_for_ckpt(tmpdir, self.model_weights_ckpt)
                 state_dict = self._load_state_dict_from_disk(model_weights, map_location=map_location)
+                # exit()
             finally:
                 os.chdir(cwd)
 
