@@ -660,13 +660,14 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         #                     log_probs_ref, decoder_lengths=encoded_len_ref, return_hypotheses=False,
         #                 )
         
+        # # Dropout 1 vs Dropout 2
         # hyp_l = []
         # hyp_w = []
         # exclude_idx = []
         # for i in range(len(text)):
         #     wer_1, _, _, _, _ = word_error_rate_detail([text[i]], [te_hyp_dropout_1[i]])
         #     wer_2, _, _, _, _ = word_error_rate_detail([text[i]], [te_hyp_dropout_2[i]])
-        #     if wer_1 < wer_2:
+        #     if wer_1 > wer_2:
         #         hyp_l.append(te_hyp_dropout_1[i])
         #         hyp_w.append(te_hyp_dropout_2[i])
         #     else:
@@ -676,6 +677,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         #     if wer_1 == wer_2 or wer_1 ==0.0 or wer_2 == 0.0:
         #         exclude_idx.append(i)
 
+        # GT vs Dropout 1
         exclude_idx = [i for i in range(len(text)) if text[i] == te_hyp_dropout_1[i]]
         hyp_w = transcript
         hyp_w_len = transcript_len
@@ -683,7 +685,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
 
         log_probs_ref = torch.log(te_softmax)
         encoded_len_ref = te_softmax_len
-        
+
         hyp_l, hyp_l_len = self.make_transcript_batch(hyp_l, None, signal.device)
         # hyp_w, hyp_w_len = self.make_transcript_batch(hyp_w, None, signal.device)
 
@@ -729,6 +731,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 'train_loss': loss_value,
                 'ctc_loss': ctc_loss_value,
                 'preference_loss': preference_loss,
+                'chosen_prob': (st_chosen_logps-ref_chosen_logps).mean(),
+                'rejected_prob': (st_rejected_logps-ref_rejected_logps).mean(),
                 'learning_rate': self._optimizer.param_groups[0]['lr'],
                 'global_step': torch.tensor(self.trainer.global_step, dtype=torch.float32),
             }
@@ -744,10 +748,10 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             wer, _, _ = self._wer.compute()
             self._wer.reset()
             tensorboard_logs.update({'training_batch_wer': wer})
-            logging.info(f"Winner: {st_chosen_logps}")
-            logging.info(f"Ref Winner: {ref_chosen_logps}")
-            logging.info(f"Loser: {st_rejected_logps}")
-            logging.info(f"Ref Loser: {ref_rejected_logps}")
+            # logging.info(f"Winner: {st_chosen_logps}")
+            # logging.info(f"Ref Winner: {ref_chosen_logps}")
+            # logging.info(f"Loser: {st_rejected_logps}")
+            # logging.info(f"Ref Loser: {ref_rejected_logps}")
 
         return {'loss': loss_value, 'log': tensorboard_logs}
 
@@ -807,14 +811,14 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         # for i in range(len(text)):
         #     wer_1, _, _, _, _ = word_error_rate_detail([text[i]], [te_hyp_dropout_1[i]])
         #     wer_2, _, _, _, _ = word_error_rate_detail([text[i]], [te_hyp_dropout_2[i]])
-        #     if wer_1 < wer_2:
+        #     if wer_1 > wer_2:
         #         hyp_l.append(te_hyp_dropout_1[i])
         #         hyp_w.append(te_hyp_dropout_2[i])
         #     else:
         #         hyp_l.append(te_hyp_dropout_2[i])
         #         hyp_w.append(te_hyp_dropout_1[i])
             
-        #     if wer_1 == wer_2 or wer_1 ==0.0 or wer_2 == 0.0:
+        #     if wer_1 == wer_2 or wer_1 == 0.0 or wer_2 == 0.0:
         #         exclude_idx.append(i)
 
         exclude_idx = [i for i in range(len(text)) if text[i] == te_hyp_dropout_1[i]]
