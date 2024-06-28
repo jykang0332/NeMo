@@ -169,7 +169,17 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             self.preprocessor.featurizer.dither = 0.0
             self.preprocessor.featurizer.pad_to = 0
             # Switch model to evaluation mode
+            # self.encoder.freeze()
+            # self.decoder.freeze()
             self.eval()
+            # self.train()
+            # for module in self.modules():
+            #     if isinstance(module, (torch.nn.Dropout, torch.nn.Dropout1d, torch.nn.Dropout2d, torch.nn.Dropout3d)):
+            #         module.train()
+            #         module.p = 0.1
+            #     else:
+            #         module.eval()
+
             # Freeze the encoder and decoder modules
             self.encoder.freeze()
             self.decoder.freeze()

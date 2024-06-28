@@ -140,6 +140,7 @@ class SaveRestoreConnector:
                     config_yaml = override_config_path
                 if not isinstance(config_yaml, (OmegaConf, DictConfig)):
                     conf = OmegaConf.load(config_yaml)
+                    # conf = OmegaConf.load('/data/jykang/NeMo/tmp/model_config.yaml')
                 else:
                     conf = config_yaml
                     if override_config_path is not None:

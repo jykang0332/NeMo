@@ -41,7 +41,8 @@
 # Note:  They are based on the assumption of max_duration of 20. If you have longer or shorter max_duration, then batch sizes may need to get updated accordingly.
 
 
-name: "Conformer-CTC-BPE-DPO"
+name: "Conformer-CTC-BPE-DPO-frame-tau"
+# name: "debug"
 # init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-SKD/2024-05-18_01-54-39/checkpoints/Conformer-CTC-BPE-SKD.nemo"
 
 model:
@@ -52,7 +53,7 @@ model:
 
   train_ds:
     manifest_filepath: "/data/jykang/database/train_clean_100.json,/data/jykang/database/train_clean_360.json,/data/jykang/database/train_other_500.json"
-    # manifest_filepath: "/data/jykang/database/train_clean_100.json"
+    # manifest_filepath: "/data/jykang/database/train_other_500.json"
     sample_rate: ${model.sample_rate}
     batch_size: 18 # you may increase batch_size if your memory allows
     shuffle: true
