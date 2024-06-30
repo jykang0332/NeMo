@@ -110,10 +110,11 @@ class ModelChangeConfig:
 @dataclass
 class TranscriptionConfig:
     # Required configs
-    model_path: Optional[str] = None  # Path to a .nemo file
+    # model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-SKD/2024-05-18_01-54-39/checkpoints/Conformer-CTC-BPE-SKD.nemo"  # Path to a .nemo file
+    model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-DPO-frame-tau/2024-06-20_21-56-28/checkpoints/Conformer-CTC-BPE-DPO-frame-tau.nemo"  # Path to a .nemo file
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = None  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/data/jykang/database/test_clean.json"  # Path to dataset's JSON manifest
     channel_selector: Optional[
         Union[int, str]
     ] = None  # Used to select a single channel from multichannel audio, or use average across channels
