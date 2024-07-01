@@ -41,7 +41,7 @@
 # Note:  They are based on the assumption of max_duration of 20. If you have longer or shorter max_duration, then batch sizes may need to get updated accordingly.
 
 
-name: "Conformer-CTC-BPE-DPO-frame-tau"
+name: "Conformer-CTC-BPE-DPO-seq-tau"
 # name: "debug"
 # init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-SKD/2024-05-18_01-54-39/checkpoints/Conformer-CTC-BPE-SKD.nemo"
 
