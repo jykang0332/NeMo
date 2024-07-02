@@ -5,6 +5,12 @@ nemo_experiments_ctc
 nemo_experiments_tdt
 evaluation_transcripts.json
 
+data_rnnt
+nemo_experiments_tedec
+decoders
+text
+tokenizer
+
 # log and data files
 *.model
 *.pkl
