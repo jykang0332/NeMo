@@ -4,6 +4,7 @@ nemo_experiments
 nemo_experiments_ctc
 nemo_experiments_tdt
 evaluation_transcripts.json
+ctc_teacher
 
 # log and data files
 *.model
