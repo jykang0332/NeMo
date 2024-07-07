@@ -5,6 +5,8 @@ nemo_experiments_ctc
 nemo_experiments_tdt
 evaluation_transcripts.json
 
+nemo_experiments_dpo
+
 data_rnnt
 nemo_experiments_tedec
 decoders
