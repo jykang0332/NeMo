@@ -7,6 +7,10 @@ nemo_experiments_tdt
 evaluation_transcripts.json
 *.ckpt
 tokenizer
+nemo_experiments_dpo
+nemo_experiments_conskd
+nemo_experiments_tedec
+decoders
 
 # log and data files
 *.model

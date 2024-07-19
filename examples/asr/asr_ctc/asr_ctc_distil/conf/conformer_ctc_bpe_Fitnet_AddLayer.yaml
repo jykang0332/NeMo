@@ -41,11 +41,10 @@
 # Note:  They are based on the assumption of max_duration of 20. If you have longer or shorter max_duration, then batch sizes may need to get updated accordingly.
 
 
-name: "Conformer-CTC-BPE-Fitnet_CTC-AddLayer"
-# name: "Conformer-CTC-BPE-Fitnet-AddLayer-SKD"
-# name: 'test'
+name: "Conformer-CTC-BPE-Fitnet-AddLayer-SKD"
+# name: "Conformer-CTC-BPE-Fitnet-AddLayer"
 
-# init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/CTC_Teacher_Decoder_Reusing/Conformer-CTC-BPE-Fitnet-AddLayer/2024-04-04_23-44-32/checkpoints/Conformer-CTC-BPE-Fitnet-AddLayer.nemo"
+init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet-AddLayer/2024-07-03_20-23-45.nemo"
 
 model:
   sample_rate: 16000
@@ -57,7 +56,7 @@ model:
     manifest_filepath: "/data/jykang/database/train_clean_100.json,/data/jykang/database/train_clean_360.json,/data/jykang/database/train_other_500.json"
     sample_rate: ${model.sample_rate}
     batch_size: 24 # you may increase batch_size if your memory allows
-    shuffle: false
+    shuffle: true
     num_workers: 8
     pin_memory: true
     max_duration: 16.7 # it is set for LibriSpeech, you may need to update it for your dataset
@@ -198,7 +197,7 @@ model:
 trainer:
   devices: -1 # number of GPUs, -1 would use all available GPUs
   num_nodes: 1
-  max_epochs: 100
+  max_epochs: 50
   max_steps: -1 # computed at runtime if not set
   val_check_interval: 1.0 # Set to 0.25 to check 4 times per epoch, or an int for number of iterations
   accelerator: auto

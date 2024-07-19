@@ -71,9 +71,10 @@ from nemo.collections.asr.models.ctc_bpe_models_SKD import EncDecCTCModelBPE
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
+import torch
 
 
-@hydra_runner(config_path="./conf", config_name="conformer_ctc_bpe_Fitnet_SKD")
+@hydra_runner(config_path="./conf", config_name="conformer_ctc_bpe_Fitnet_AddLayer")
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
@@ -81,8 +82,17 @@ def main(cfg):
     exp_manager(trainer, cfg.get("exp_manager", None))
     asr_model = EncDecCTCModelBPE(cfg=cfg.model, trainer=trainer)
 
+    # te_tmp_bias = asr_model.state_dict()['decoder.decoder_layers.0.bias']
+    # te_tmp_weight = asr_model.state_dict()['decoder.decoder_layers.0.weight']
+    # b = te_tmp_bias.clone()
+    # w = te_tmp_weight.clone()
+    
     # Initialize the weights of the model from another model, if provided via config
     asr_model.maybe_init_from_pretrained_checkpoint(cfg)
+
+    # with torch.no_grad():
+    #     asr_model.state_dict()['decoder.decoder_layers.0.bias'].copy_(b)
+    #     asr_model.state_dict()['decoder.decoder_layers.0.weight'].copy_(w)
 
     trainer.fit(asr_model)
 
