@@ -10,6 +10,7 @@ tokenizer
 nemo_experiments_dpo
 nemo_experiments_conskd
 nemo_experiments_tedec
+nemo_experiments_tedec_ver2
 decoders
 
 # log and data files
