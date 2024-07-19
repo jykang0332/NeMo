@@ -10,6 +10,8 @@ evaluation_transcripts.json
 *.ckpt
 tokenizer
 decoders
+nemo_experiments_tedec_ver2
+nemo_experiments_conskd
 
 # log and data files
 *.model
