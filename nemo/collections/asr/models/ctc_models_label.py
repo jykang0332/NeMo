@@ -197,12 +197,23 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
 
                 temporary_datalayer = self._setup_transcribe_dataloader(config)
                 for test_batch in tqdm(temporary_datalayer, desc="Transcribing", disable=not verbose):
-                    # logits, logits_len, greedy_predictions = self.forward(
-                    #     input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device),
-                    # )
-                    logits, logits_len, greedy_predictions, decoder_output = self.forward(
-                        input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device), return_logits=True,
+
+                    # input_signal_noise = test_batch[0]
+                    # signal_length = test_batch[1]
+                    # scale = 0.5
+                    # # Inject noise
+                    # for i in range(len(input_signal_noise)):
+                    #     half_length = signal_length[i] // 2
+                    #     noise = torch.randn(half_length) * scale  # Generate scaled noise
+                    #     input_signal_noise[i, half_length: signal_length[i]] += noise
+
+                    logits, logits_len, greedy_predictions = self.forward(
+                        input_signal=test_batch[0].to(device), input_signal_length=test_batch[1].to(device),
                     )
+                    # logits, logits_len, greedy_predictions = self.forward(
+                    #     input_signal=input_signal_noise.to(device), input_signal_length=test_batch[1].to(device),
+                    # )
+
 
                     if logprobs:
                         # dump log probs per file
@@ -210,6 +221,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                             lg = logits[idx][: logits_len[idx]]
                             hypotheses.append(lg.cpu().numpy())
                     else:
+                        # 1. log softmax ver
                         current_hypotheses, all_hyp = self.decoding.ctc_decoder_predictions_tensor(
                             logits, decoder_lengths=logits_len, return_hypotheses=return_hypotheses,
                         )
@@ -218,11 +230,9 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                         if return_hypotheses:
                             # dump log probs per file
                             for idx in range(logits.shape[0]):
-                                # current_hypotheses[idx].y_sequence = logits[idx][: logits_len[idx]]
-                                current_hypotheses[idx].y_sequence = decoder_output[idx][: logits_len[idx]]
+                                current_hypotheses[idx].y_sequence = logits[idx][: logits_len[idx]]
                                 if current_hypotheses[idx].alignments is None:
-                                    # current_hypotheses[idx].alignments = current_hypotheses[idx].y_sequence
-                                    current_hypotheses[idx].alignments = logits[idx][: logits_len[idx]]
+                                    current_hypotheses[idx].alignments = current_hypotheses[idx].y_sequence
 
                         if all_hyp is None:
                             hypotheses += current_hypotheses
@@ -584,8 +594,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            # log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
-            log_probs, encoded_len, predictions, logits = self.forward(input_signal=signal, input_signal_length=signal_len, return_logits=True)
+            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
         
         if hasattr(self, '_trainer') and self._trainer is not None:
             log_every_n_steps = self._trainer.log_every_n_steps
@@ -604,44 +613,13 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         y_onehot = torch.eye(te_softmax.shape[-1]).to(y.device)
         y_onehot = y_onehot[y].float()
 
-        # Evidential Learning
-        evidence = F.softplus(logits)
-        alpha = evidence + 1
-        
-        # 1. loglikelihood_loss
-        S = torch.sum(alpha, dim=-1, keepdim=True)
-        loglikelihood_err = torch.sum((y_onehot-(alpha/S))**2, dim=-1, keepdim=True)
-        loglikelihood_var = torch.sum(alpha * (S - alpha) / (S * S * (S + 1)), dim=-1, keepdim=True)
-        loglikelihood = loglikelihood_err + loglikelihood_var
-
-        # 2. KLD loss
-        kl_alpha = (alpha - 1) * (1 - y_onehot) + 1 # (B, T, 129)
-        kl_alpha = kl_alpha.to(alpha.device)
-        ones = torch.ones([1, log_probs.shape[1], log_probs.shape[-1]], dtype=torch.float32) # (1, T, 129)
-        ones = ones.to(alpha.device)
-        sum_alpha = torch.sum(kl_alpha, dim=-1, keepdim=True) # (B, T, 1)
-        first_term = (
-            torch.lgamma(sum_alpha) # (B, T, 1)
-            - torch.lgamma(kl_alpha).sum(dim=-1, keepdim=True) # (B, T, 1)
-            + torch.lgamma(ones).sum(dim=-1, keepdim=True) # (1, T, 1) -> torch.lgamma(1) * 129 = 0
-            - torch.lgamma(ones.sum(dim=-1, keepdim=True)) # (1, T, 1) -> torch.lgamma(129)
-        ) # (B, T, 1)
-        second_term = (
-            (kl_alpha - ones) # (B, T, 129)
-            .mul(torch.digamma(kl_alpha) - torch.digamma(sum_alpha)) # (B, T, 129)
-            .sum(dim=-1, keepdim=True)
-        ) # (B, T, 1)
-        kl_divergence = first_term + second_term
-
-        # Final loss
+        # SKD loss
+        st_softmax = torch.exp(log_probs)
         encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
-        # loglikelihood_ = (loglikelihood.squeeze(-1) * encoded_mask).sum(dim=-1).mean()
-        # kl_divergence_ = (kl_divergence.squeeze(-1) * encoded_mask).sum(dim=-1).mean()
-        annealing_coef = min(1.0, self.trainer.current_epoch / 1000)
-        evid_loss = loglikelihood + annealing_coef * kl_divergence # (B, T, 1)
-        evid_loss = (evid_loss.squeeze(-1) * encoded_mask).sum(dim=-1).mean()
+        error = (st_softmax - y_onehot) * encoded_mask.unsqueeze(-1)  # (B, T, 129)
+        label_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
 
-        loss_value = ctc_loss_value + 0.25 * evid_loss
+        loss_value = ctc_loss_value + 0.25 * label_loss
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -658,10 +636,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             {
                 'train_loss': loss_value,
                 'ctc_loss': ctc_loss_value,
-                'evid_loss': evid_loss,
-                'mse_loss': (loglikelihood.squeeze(-1) * encoded_mask).sum(dim=-1).mean(),
-                'kld_loss': (kl_divergence.squeeze(-1) * encoded_mask).sum(dim=-1).mean(),
-                'coeff': annealing_coef,
+                'label_loss': label_loss,
                 'learning_rate': self._optimizer.param_groups[0]['lr'],
                 'global_step': torch.tensor(self.trainer.global_step, dtype=torch.float32),
             }
@@ -710,9 +685,12 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         else:
             log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len)
 
-        loss_value = self.loss(
+        ctc_loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
         )
+
+        loss_value = ctc_loss_value
+
         loss_value, metrics = self.add_interctc_losses(
             loss_value, transcript, transcript_len, compute_wer=True, log_wer_num_denom=True, log_prefix="val_",
         )
