@@ -1,10 +1,10 @@
-data
+# data
 nemo_experiments_transducer
 nemo_experiments
 nemo_experiments_ctc
 nemo_experiments_tdt
 evaluation_transcripts.json
-ctc_teacher
+ctc_feature
 
 # log and data files
 *.model
