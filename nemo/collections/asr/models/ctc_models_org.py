@@ -76,9 +76,6 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             reduction=self._cfg.get("ctc_reduction", "mean_batch"),
         )
 
-        # self._cfg.spec_augment['freq_masks'] = 16
-        # self._cfg.spec_augment['time_masks'] = 30
-
         if hasattr(self._cfg, 'spec_augment') and self._cfg.spec_augment is not None:
             self.spec_augmentation = EncDecCTCModel.from_config_dict(self._cfg.spec_augment)
         else:
@@ -550,10 +547,10 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 input_signal=input_signal, length=input_signal_length,
             )
 
-        # if self.spec_augmentation is not None and self.training:
-        #     processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
+        if self.spec_augmentation is not None and self.training:
+            processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
 
-        processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
+        # processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
 
         encoder_output = self.encoder(audio_signal=processed_signal, length=processed_signal_length)
         encoded = encoder_output[0]
