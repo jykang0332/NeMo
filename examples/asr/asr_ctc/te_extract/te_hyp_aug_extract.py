@@ -37,6 +37,9 @@ from nemo.collections.asr.parts.utils.transcribe_utils import (
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 
+import numpy as np
+from tqdm.auto import tqdm
+
 """
 Transcribe audio file on a single CPU/GPU. Useful for transcription of moderate amounts of audio data.
 
@@ -110,10 +113,13 @@ class ModelChangeConfig:
 @dataclass
 class TranscriptionConfig:
     # Required configs
-    # model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments_tedec/CTC_Baseline/Conformer-CTC-BPE-SKD/2024-03-05_20-33-47/checkpoints/Conformer-CTC-BPE-SKD.nemo"
-    model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments/stt_en_fastconformer_transducer_xlarge.nemo"
+    model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments_tedec/stt_en_conformer_ctc_large_ls.nemo"  # Path to a .nemo file
+    pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = "/data/jykang/database/debug.json"  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/data/jykang/database/train_clean_100.json"  # Path to dataset's JSON manifest
+    # save_path : Optional[str] = "/data/jykang/NeMo/data/"
+    save_path_1 : Optional[str] = "/data/jykang/NeMo/data/softmax_aug/WER_75/train-clean-100"
+    save_path_2 : Optional[str] = "/data/jykang/NeMo/data/te_hyp_aug/WER_75/train-clean-100"
     channel_selector: Optional[
         Union[int, str]
     ] = None  # Used to select a single channel from multichannel audio, or use average across channels
@@ -121,8 +127,8 @@ class TranscriptionConfig:
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
 
     # General configs
-    output_filename: Optional[str] = "/data/jykang/NeMo/data/transcriptions/dev_clean.json"
-    batch_size: int = 1
+    output_filename: Optional[str] = "/data/jykang/NeMo/data/transcriptions/train_clean_100.json"
+    batch_size: int = 32
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.
     pred_name_postfix: Optional[str] = None  # If you need to use another model name, rather than standard one.
@@ -341,6 +347,19 @@ def main(cfg: TranscriptionConfig) -> Union[TranscriptionConfig, List[Hypothesis
                     channel_selector=cfg.channel_selector,
                     augmentor=augmentor,
                 )
+
+    # Extract teacher text
+    for idx, trans in tqdm(enumerate(transcriptions)):
+        te_softmax = torch.exp(trans.y_sequence)
+        te_softmax = te_softmax.cpu().numpy()
+
+        te_hyp = [trans.text]
+
+        base_file_name = os.path.basename(filepaths[idx])
+        file_name = os.path.splitext(base_file_name)[0]
+
+        np.save(os.path.join(cfg.save_path_1, file_name), te_softmax)
+        np.save(os.path.join(cfg.save_path_2, file_name), te_hyp)
 
     logging.info(f"Finished transcribing {len(filepaths)} files !")
     logging.info(f"Writing transcriptions into file: {cfg.output_filename}")

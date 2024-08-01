@@ -632,7 +632,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         hyp_w = te_align
         hyp_l = te_align
 
-        # Stage 3: DPO training
+        # DPO training
         log_probs_eval_ref = torch.log(te_softmax)
         log_probs_tau_ref = torch.log(te_softmax_tau)
 

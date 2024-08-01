@@ -41,9 +41,8 @@
 # Note:  They are based on the assumption of max_duration of 20. If you have longer or shorter max_duration, then batch sizes may need to get updated accordingly.
 
 
-# name: "Conformer-CTC-BPE-DPO-seq-tau/2024-06-30_19-45-55"
+# name: "Conformer-CTC-BPE-DPO-frame-tau"
 name: "debug"
-# init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-SKD/2024-05-18_01-54-39/checkpoints/Conformer-CTC-BPE-SKD.nemo"
 
 model:
   sample_rate: 16000
@@ -197,7 +196,7 @@ model:
 trainer:
   devices: -1 # number of GPUs, -1 would use all available GPUs
   num_nodes: 1
-  max_epochs: 200
+  max_epochs: 100
   max_steps: -1 # computed at runtime if not set
   val_check_interval: 1.0 # Set to 0.25 to check 4 times per epoch, or an int for number of iterations
   accelerator: auto
