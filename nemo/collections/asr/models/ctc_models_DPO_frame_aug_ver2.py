@@ -646,6 +646,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         beta = 0.001
 
         # dpo_error = pi_logratios - ref_logratios
+        # st_chosen_logps - st_rejected_logps - (ref_chosen_logps - ref_rejected_logps)
+        # st_chosen_logps - ref_chosen_logps - (st_rejected_logps - ref_rejected_logps)
         dpo_error = (st_chosen_logps - ref_chosen_logps) - (st_rejected_logps - ref_rejected_logps).detach()
 
         # preference_loss = - F.logsigmoid(beta * (pi_logratios - ref_logratios))
@@ -660,18 +662,19 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         #     log_probs=log_probs_2, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
         # )
 
-        # SKD loss
-        st_softmax = torch.exp(log_probs)
-        encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
-        error = (st_softmax - te_softmax) * encoded_mask.unsqueeze(-1)  # (B, T, 129)
-        skd_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
+        # # SKD loss
+        # st_softmax = torch.exp(log_probs)
+        # encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
+        # error = (st_softmax - te_softmax) * encoded_mask.unsqueeze(-1)  # (B, T, 129)
+        # skd_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
 
         # st_softmax_2 = torch.exp(log_probs_2)
         # error_2 = (st_softmax_2 - te_softmax) * encoded_mask.unsqueeze(-1)  # (B, T, 129)
         # skd_loss_2 = torch.mean(torch.sum(torch.norm(error_2, p=2, dim=-1).pow(2), dim=-1))
 
         # loss_value = ctc_loss_value + ctc_loss_value_2 + 100 * preference_loss + 0.25 * skd_loss + 0.25 * skd_loss_2
-        loss_value = ctc_loss_value + 50 * preference_loss + 0.25 * skd_loss
+        # loss_value = ctc_loss_value + 50 * preference_loss + 0.25 * skd_loss
+        loss_value = ctc_loss_value + 50 * preference_loss
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -689,7 +692,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 'train_loss': loss_value,
                 'ctc_loss': ctc_loss_value,
                 # 'ctc_loss_2': ctc_loss_value_2,
-                'skd_loss': skd_loss,
+                # 'skd_loss': skd_loss,
                 # 'skd_loss_2': skd_loss_2,
                 'preference_loss': preference_loss,
                 'chosen_prob': (st_chosen_logps-ref_chosen_logps).mean(),
