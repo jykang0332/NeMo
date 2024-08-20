@@ -76,8 +76,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             reduction=self._cfg.get("ctc_reduction", "mean_batch"),
         )
 
-        # self._cfg.spec_augment['freq_masks'] = 16
-        # self._cfg.spec_augment['time_masks'] = 30
+        self._cfg.spec_augment['freq_masks'] = 16
+        self._cfg.spec_augment['time_masks'] = 5
 
         if hasattr(self._cfg, 'spec_augment') and self._cfg.spec_augment is not None:
             self.spec_augmentation = EncDecCTCModel.from_config_dict(self._cfg.spec_augment)

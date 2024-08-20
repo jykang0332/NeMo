@@ -116,10 +116,10 @@ class TranscriptionConfig:
     model_path: Optional[str] = "/data/jykang/NeMo/nemo_experiments_tedec/stt_en_conformer_ctc_large_ls.nemo"  # Path to a .nemo file
     pretrained_name: Optional[str] = None  # Name of a pretrained model
     audio_dir: Optional[str] = None  # Path to a directory which contains audio files
-    dataset_manifest: Optional[str] = "/data/jykang/database/train_clean_100.json"  # Path to dataset's JSON manifest
+    dataset_manifest: Optional[str] = "/data/jykang/database/train_other_500.json"  # Path to dataset's JSON manifest
     # save_path : Optional[str] = "/data/jykang/NeMo/data/"
-    save_path_1 : Optional[str] = "/data/jykang/NeMo/data/softmax_aug/WER_75/train-clean-100"
-    save_path_2 : Optional[str] = "/data/jykang/NeMo/data/te_hyp_aug/WER_75/train-clean-100"
+    save_path_1 : Optional[str] = "/data/jykang/NeMo/data/softmax_aug/freq_mask_16/train-other-500"
+    save_path_2 : Optional[str] = "/data/jykang/NeMo/data/te_hyp_aug/freq_mask_16/train-other-500"
     channel_selector: Optional[
         Union[int, str]
     ] = None  # Used to select a single channel from multichannel audio, or use average across channels
@@ -127,7 +127,7 @@ class TranscriptionConfig:
     eval_config_yaml: Optional[str] = None  # Path to a yaml file of config of evaluation
 
     # General configs
-    output_filename: Optional[str] = "/data/jykang/NeMo/data/transcriptions/train_clean_100.json"
+    output_filename: Optional[str] = "/data/jykang/NeMo/data/transcriptions/train_other_500.json"
     batch_size: int = 32
     num_workers: int = 0
     append_pred: bool = False  # Sets mode of work, if True it will add new field transcriptions.
