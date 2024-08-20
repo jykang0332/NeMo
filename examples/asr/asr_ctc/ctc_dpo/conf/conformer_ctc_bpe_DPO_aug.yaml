@@ -42,7 +42,7 @@
 
 
 name: "Conformer-CTC-BPE-DPO-frame-aug-sg"
-# name: "Conformer-CTC-BPE-SKD-DPO/skd_dpo_frame_sg_ver2"
+# init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet/2024-08-14_17-33-59/checkpoints/Conformer-CTC-BPE-Fitnet.nemo" 
 
 model:
   sample_rate: 16000
@@ -115,13 +115,21 @@ model:
     freq_width: 27
     time_width: 0.05
   
+  # spec_augment_2:
+  #   _target_: nemo.collections.asr.modules.SpectrogramAugmentation
+  #   freq_masks: 16 # set to zero to disable it
+  #   # you may use lower time_masks for smaller models to have a faster convergence
+  #   time_masks: 30 # set to zero to disable it
+  #   freq_width: 27
+  #   time_width: 0.05
+
   spec_augment_2:
     _target_: nemo.collections.asr.modules.SpectrogramAugmentation
     freq_masks: 16 # set to zero to disable it
     # you may use lower time_masks for smaller models to have a faster convergence
-    time_masks: 30 # set to zero to disable it
+    time_masks: 0 # set to zero to disable it
     freq_width: 27
-    time_width: 0.05
+    time_width: 0
 
   encoder:
     _target_: nemo.collections.asr.modules.ConformerEncoder
