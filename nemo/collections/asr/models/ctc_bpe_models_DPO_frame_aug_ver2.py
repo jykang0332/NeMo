@@ -24,7 +24,7 @@ from nemo.collections.asr.data.audio_to_text_dali import AudioToBPEDALIDataset
 from nemo.collections.asr.losses.ctc import CTCLoss
 from nemo.collections.asr.metrics.wer_bpe import WERBPE, CTCBPEDecoding, CTCBPEDecodingConfig
 # from nemo.collections.asr.models.ctc_models_DPO_frame_aug_ver2 import EncDecCTCModel
-from nemo.collections.asr.models.ctc_models_DPO_frame_aug_ver3 import EncDecCTCModel
+from nemo.collections.asr.models.ctc_models_DPO_frame_aug_ver4 import EncDecCTCModel
 from nemo.collections.asr.parts.mixins import ASRBPEMixin
 from nemo.core.classes.common import PretrainedModelInfo
 from nemo.utils import logging, model_utils

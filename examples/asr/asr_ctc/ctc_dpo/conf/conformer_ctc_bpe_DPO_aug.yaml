@@ -41,7 +41,7 @@
 # Note:  They are based on the assumption of max_duration of 20. If you have longer or shorter max_duration, then batch sizes may need to get updated accordingly.
 
 
-name: "Conformer-CTC-BPE-DPO-frame-aug-sg"
+name: "Conformer-CTC-BPE-DPO-frame-aug-sg-guided"
 # init_from_nemo_model: "/data/jykang/NeMo/nemo_experiments/Conformer-CTC-BPE-Fitnet/2024-08-14_17-33-59/checkpoints/Conformer-CTC-BPE-Fitnet.nemo" 
 
 model:

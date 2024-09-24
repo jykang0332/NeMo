@@ -609,7 +609,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
            te_softmax = te_softmax[:, :log_probs.shape[1], :]
            te_softmax_winner = te_softmax_winner[:, :log_probs.shape[1], :]
            te_softmax_loser = te_softmax_loser[:, :log_probs.shape[1], :]
-        
+    
         te_align = te_softmax.argmax(dim=-1)
         hyp_w = te_align
         hyp_l = te_align
@@ -658,7 +658,28 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
         )
 
-        loss_value = ctc_loss_value + 50 * preference_loss
+        # Guided loss
+        # Change te_softmax into one-hot vector
+        # label >> 0: padding, 128: blank
+        te_align = torch.nn.functional.one_hot(te_align)
+        te_align[:, :, 0] = 0
+        te_align[:, :, 128] = 0
+        te_align = te_align.to(torch.float32)
+
+        st_softmax = torch.exp(log_probs)
+        # st_softmax = log_probs
+
+        te_mask, st_softmax_lst = [], []
+        for i in range(encoded_len.shape[0]):
+            te_mask.append(te_align[i, :encoded_len[i], :])
+            st_softmax_lst.append(st_softmax[i, :encoded_len[i], :])
+        te_mask = torch.cat(te_mask, dim=0)
+        st_softmax_lst = torch.cat(st_softmax_lst, dim=0)
+
+        te_mask = te_mask.cuda()
+        guided_loss = - torch.sum(te_mask * st_softmax_lst) / encoded_len.shape[0]
+
+        loss_value = ctc_loss_value + 50 * preference_loss + guided_loss
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -676,6 +697,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
                 'train_loss': loss_value,
                 'ctc_loss': ctc_loss_value,
                 'preference_loss': preference_loss,
+                'guided_loss': guided_loss,
                 'chosen_prob': (st_chosen_logps-ref_chosen_logps).mean(),
                 'rejected_prob': (st_rejected_logps-ref_rejected_logps).mean(),
                 'learning_rate': self._optimizer.param_groups[0]['lr'],
