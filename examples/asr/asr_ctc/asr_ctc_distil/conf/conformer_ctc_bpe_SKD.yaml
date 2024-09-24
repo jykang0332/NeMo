@@ -42,7 +42,7 @@
 
 
 # name: "Conformer-CTC-BPE-SKD-DPO/skd_ver2"
-name: "Conformer-CTC-BPE-Fitnet"
+name: "Conformer-CTC-BPE-Guided"
 
 model:
   sample_rate: 16000
@@ -195,7 +195,7 @@ model:
 trainer:
   devices: -1 # number of GPUs, -1 would use all available GPUs
   num_nodes: 1
-  max_epochs: 10
+  max_epochs: 100
   max_steps: -1 # computed at runtime if not set
   val_check_interval: 1.0 # Set to 0.25 to check 4 times per epoch, or an int for number of iterations
   accelerator: auto
