@@ -666,13 +666,14 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         ctc_loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
         )
-        # SKD loss
-        st_softmax = torch.exp(log_probs)
-        encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
-        error = (st_softmax - te_softmax) * encoded_mask.unsqueeze(-1)  # (B, T, 129)
-        skd_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
+        # # SKD loss
+        # st_softmax = torch.exp(log_probs)
+        # encoded_mask = (torch.arange(log_probs.shape[1], device=encoded_len.device)[None, :] < encoded_len[:, None]).float()  # (B, T)
+        # error = (st_softmax - te_softmax) * encoded_mask.unsqueeze(-1)  # (B, T, 129)
+        # skd_loss = torch.mean(torch.sum(torch.norm(error, p=2, dim=-1).pow(2), dim=-1))
 
-        loss_value = ctc_loss_value + 50 * preference_loss + 0.25 * skd_loss
+        # loss_value = ctc_loss_value + 50 * preference_loss + 0.25 * skd_loss
+        loss_value = ctc_loss_value + 100 * preference_loss
 
         # Add auxiliary losses, if registered
         loss_value = self.add_auxiliary_losses(loss_value)
@@ -689,7 +690,7 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
             {
                 'train_loss': loss_value,
                 'ctc_loss': ctc_loss_value,
-                'skd_loss': skd_loss,
+                # 'skd_loss': skd_loss,
                 'preference_loss': preference_loss,
                 'chosen_prob': (st_chosen_logps-ref_chosen_logps).mean(),
                 'rejected_prob': (st_rejected_logps-ref_rejected_logps).mean(),
