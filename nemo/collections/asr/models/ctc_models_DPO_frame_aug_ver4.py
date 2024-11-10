@@ -666,8 +666,8 @@ class EncDecCTCModel(ASRModel, ExportableEncDecModel, ASRModuleMixin, InterCTCMi
         te_align[:, :, 128] = 0
         te_align = te_align.to(torch.float32)
 
-        st_softmax = torch.exp(log_probs)
-        # st_softmax = log_probs
+        # st_softmax = torch.exp(log_probs)
+        st_softmax = log_probs
 
         te_mask, st_softmax_lst = [], []
         for i in range(encoded_len.shape[0]):
